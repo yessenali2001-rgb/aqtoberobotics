@@ -10,7 +10,7 @@
  *  Установка описана в attendance/README.md
  *************************************************************/
 
-var VERSION = '2026-09-13-2';         // метка версии кода: видна в ответе сервера
+var VERSION = '2026-09-14-2';         // метка версии кода: видна в ответе сервера
 var SHEET_ID = '';                    // пусто = скрипт привязан к таблице
 var FIRST_ADMIN_NAME = 'Администратор';
 var SESSION_DAYS = 90;                // сколько дней держится вход
@@ -24,7 +24,8 @@ var SHEETS = {
   settings: ['key','value'],
   sessions: ['token','personId','createdAt','expiresAt'],
   awards:   ['id','studentId','date','title','subject','level','result','note','updatedAt','updatedBy'],
-  topics:   ['id','studentId','subject','title','status','due','note','updatedAt','updatedBy']
+  topics:   ['id','studentId','subject','title','status','due','note','updatedAt','updatedBy'],
+  school:   ['id','year','category','event','team','award','result','note','updatedAt','updatedBy']
 };
 
 var STATUSES = ['p','l','e','a'];     // был / опоздал / уважительная / пропуск
@@ -318,14 +319,23 @@ function stateFor_(person) {
       topics: topicsPub_(rows_('topics'), me.id),
       birthdays: people.filter(function (x) { return x.role === 'student' && x.active && x.birth; })
         .map(function (x) { return { name: x.name, birth: x.birth, team: x.team }; }),
-      clubAwards: clubAwards_(people)
+      clubAwards: clubAwards_(people),
+      school: rows_('school').map(schoolPub_),
+      version: VERSION
     };
   }
+  var withBirth = people.filter(function (x) { return x.role === 'student' && x.birth; }).length;
   return {
     me: me, settings: settings, people: people,
     marks: marksPub_(rows_('marks')),
     awards: awardsPub_(rows_('awards')),
-    topics: topicsPub_(rows_('topics'))
+    topics: topicsPub_(rows_('topics')),
+    school: rows_('school').map(schoolPub_),
+    version: VERSION,
+    stats: { students: people.filter(function (x) { return x.role === 'student' && x.active; }).length,
+             withBirth: withBirth, awards: rows_('awards').length,
+             competitions: settings.competitions.length, plan: settings.plan.length,
+             school: rows_('school').length }
   };
 }
 
@@ -532,6 +542,42 @@ API.deletePerson = function (token, id) {
   });
   drop_('people', t._row);
   dropBootCache_();
+  return true;
+};
+
+/* ---- достижения школы (командные, по годам) ---- */
+
+function schoolPub_(r) {
+  return {
+    id: String(r.id), year: String(r.year || ''), category: String(r.category || ''),
+    event: String(r.event || ''), team: String(r.team || ''),
+    award: String(r.award || ''), result: String(r.result || ''), note: String(r.note || '')
+  };
+}
+
+API.saveSchoolAward = function (token, rec) {
+  var p = auth_(token); requireStaff_(p);
+  rec = rec || {};
+  var patch = {
+    year: String(rec.year || '').trim(), category: String(rec.category || '').trim(),
+    event: String(rec.event || '').trim(), team: String(rec.team || '').trim(),
+    award: String(rec.award || '').trim(),
+    result: RESULTS.indexOf(rec.result) >= 0 ? rec.result : '',
+    note: String(rec.note || ''), updatedAt: nowIso_(), updatedBy: String(p.name)
+  };
+  if (!patch.award && !patch.event) throw new Error('Укажите соревнование или награду.');
+  var hit = null;
+  if (rec.id) rows_('school').forEach(function (r) { if (String(r.id) === String(rec.id)) hit = r; });
+  if (hit) { update_('school', hit._row, patch); patch.id = String(hit.id); }
+  else { patch.id = newId_('sa'); append_('school', patch); }
+  return schoolPub_(patch);
+};
+
+API.deleteSchoolAward = function (token, id) {
+  var p = auth_(token); requireStaff_(p);
+  var hit = null;
+  rows_('school').forEach(function (r) { if (String(r.id) === String(id)) hit = r; });
+  if (hit) drop_('school', hit._row);
   return true;
 };
 
@@ -854,6 +900,73 @@ function importBirthdays() {
   });
   return tell_('Даты рождения проставлены: ' + done +
     (missed.length ? '\nНе нашлись: ' + missed.join(', ') : ''));
+}
+
+/*************************************************************
+ *  Разовый импорт достижений школы (командные, 2024-2026).
+ *  Запустите функцию importSchoolAwards() один раз.
+ *************************************************************/
+var SCHOOL_AWARDS = [
+  ['2024', 'First Lego League', 'Aktobe First regional', 'White Hill', 'Robot design award finalist', 'honor'],
+  ['2024', 'First Lego League', 'Aktobe First regional', 'Gambit', 'Robot design award winner', 'honor'],
+  ['2025', 'First Lego League', 'Batys First Championship', 'Gambit', 'Robot design award winner', 'honor'],
+  ['2025', 'First Lego League', 'Almaty Tech Cup (CAFC)', 'Gambit', 'Mechanical innovation award', 'honor'],
+  ['2025', 'Fibonacci', 'FootBot League', 'Robotics team', '2nd place', 'silver'],
+  ['2025', 'Fibonacci', 'FootBot League', 'Robotics team', '2nd place', 'silver'],
+  ['2025', 'Infomatrix ASIA', 'Lego race', 'Robotics team', '1st place', 'gold'],
+  ['2025', 'Infomatrix ASIA', 'Lego race', 'Robotics team', '2nd place', 'silver'],
+  ['2025', 'WRO', 'Regional competition', 'Robotics team', '2nd place', 'silver'],
+  ['2025', 'WRO', 'Regional competition', 'Robotics team', '3rd place', 'bronze'],
+  ['2025', 'First Lego League', 'Aktobe First regional', 'Aqsonix', 'Core values award finalist', 'honor'],
+  ['2025', 'First Lego League', 'Aktobe First regional', 'AqBIL_Innovators', 'Robot performance award winner', 'honor'],
+  ['2025', 'First Lego League', 'Aktobe First regional', 'Gambit jr', 'Champion\'s award winner', 'honor'],
+  ['2025', 'First Lego League', 'Bishkek First regional', 'AqBIL_Innovators', 'Robot performance award winner', 'honor'],
+  ['2026', 'First Lego League', 'Batys first championship', 'Gambit jr', 'Engineering excellence award', 'honor'],
+  ['2026', 'First Lego League', 'Batys first championship', 'Aqsonix', 'Engineering excellence award', 'honor'],
+  ['2026', 'First Tech Challenge', 'Batys first championship', 'Gambit', 'Sustain award winner', 'honor'],
+  ['2026', 'Fibonacci', 'FootBot lego 9-12', 'AqBIL_Innovators', 'Judge awards', 'honor'],
+  ['2026', 'Fibonacci', 'Maze solving 9-12', 'AqBIL_Innovators', 'Judge awards', 'honor'],
+  ['2026', 'Fibonacci', 'Line following 9-12', 'AqBIL_Innovators', 'Judge awards', 'honor'],
+  ['2026', 'Fibonacci', 'Maze solving 5-8', 'Aqsonix', 'Judge awards', 'honor'],
+  ['2026', 'Fibonacci', 'Autonomous car 5-8', 'Aqsonix', '3rd place', 'bronze'],
+  ['2026', 'First Lego League', 'Astana CAFC', 'Aqsonix', 'Technical excellence award', 'honor'],
+  ['2026', 'First Lego League', 'Astana CAFC', 'BILinnovators', 'Young innovators award', 'honor'],
+  ['2026', 'First Lego League', 'Astana CAFC', 'Gambit jr', 'Engineering excellence award (quota to Bulgaria)', 'honor'],
+  ['2026', 'First Tech Challenge', 'Astana CAFC', 'Gambit', 'First premier event (quota to America)', 'honor'],
+  ['2026', 'Infomatrix ASIA', 'AI Hackathon', 'Gambit', '1st place', 'gold'],
+  ['2026', 'Infomatrix ASIA', 'Arduino Hackaton', 'Aqsonix', '3rd place', 'bronze'],
+  ['2026', 'Fibonacci Eurasian Championship', 'FootBot lego 5-8', 'Aqsonix', '3rd place', 'bronze'],
+  ['2026', 'Fibonacci Eurasian Championship', 'Maze solving 5-8', 'Aqsonix', 'Judge award', 'honor'],
+  ['2026', 'Fibonacci Eurasian Championship', 'Lego Line following 5-8', 'Aqsonix', '3rd place', 'bronze'],
+  ['2026', 'Fibonacci Eurasian Championship', 'Autonomous car 5-8', 'Aqsonix', 'Judge award', 'honor'],
+  ['2026', 'Fibonacci Eurasian Championship', 'Lego Line following 9-12', 'Aqsonix', '2nd place', 'silver'],
+  ['2026', 'First Lego League', 'Bulgaria FLL', 'Gambit jr', '3rd place', 'bronze'],
+  ['2026', 'WRO', 'Robo sport', 'Aqsonix', '2nd place', 'silver'],
+  ['2026', 'WRO', 'Robomission senior', 'AqBIL_Innovators', '2nd place', 'silver'],
+  ['2026', 'WRO', 'Robomission senior', 'AqBIL_Innovators', '1st place', 'gold'],
+  ['2026', 'First Tech Challenge', 'Western Edge', 'Gambit', 'Think award 2nd place', 'silver'],
+  ['2026', 'WRO', 'Robomission senior (respa)', 'AqBIL_Innovators', 'participants', 'part'],
+  ['2026', 'FTC', 'Almaty Tech Cup', 'Gambit', 'Judges choice award', 'honor'],
+];
+
+function importSchoolAwards() {
+  var have = {};
+  rows_('school').forEach(function (r) {
+    have[[r.year, r.event, r.team, r.award].join('|')] = true;
+  });
+  var added = 0;
+  SCHOOL_AWARDS.forEach(function (row) {
+    var key = [row[0], row[2], row[3], row[4]].join('|');
+    if (have[key]) return;
+    have[key] = true;
+    append_('school', {
+      id: newId_('sa'), year: row[0], category: row[1], event: row[2],
+      team: row[3], award: row[4], result: row[5], note: '',
+      updatedAt: nowIso_(), updatedBy: 'Импорт'
+    });
+    added++;
+  });
+  return tell_('Достижений школы добавлено: ' + added + '\nВсего в таблице: ' + rows_('school').length);
 }
 
 /** Сброс кода администратора, если он потерян. */

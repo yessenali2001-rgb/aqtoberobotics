@@ -207,6 +207,10 @@ button.cell{cursor:pointer}
 .pinlist li{display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid var(--line)}
 .pinlist b{font-variant-numeric:tabular-nums; letter-spacing:.12em}
 
+.sync{position:fixed; right:14px; bottom:14px; z-index:50; background:var(--navy); color:#fff;
+      padding:8px 14px; border-radius:99px; font-size:13px; box-shadow:var(--shadow)}
+body.dark .sync{background:var(--gold); color:var(--navy)}
+.pending{opacity:.55}
 .foot{text-align:center; color:var(--muted); font-size:12px; padding:24px 16px 40px}
 .foot img{height:26px; opacity:.75; display:block; margin:0 auto 8px}
 
@@ -287,6 +291,7 @@ button.cell{cursor:pointer}
     </div>
   </div>
   <div class="wrap">
+    <div id="warn"></div>
     <div id="banner"></div>
     <div id="bday"></div>
     <div class="tabs" id="tabs"></div>
@@ -298,6 +303,7 @@ button.cell{cursor:pointer}
   </div>
 </div>
 
+<div id="sync" class="sync hide">Сохраняем…</div>
 <div id="modal"></div>
 
 <script>
@@ -308,6 +314,10 @@ button.cell{cursor:pointer}
 
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
+/* Какую версию серверного кода ожидает этот сайт.
+   Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
+const NEED_VERSION = '2026-09-14-2';
+
 const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbzyRJx4JM-hEXWREoIxAVDGhNj9uw-gaxwl0np4lJPpwNCe-2CGWD050A8FWUgga-zE/exec';
 
 const LS = {
@@ -355,10 +365,10 @@ const nf = n => (Math.round(n*10)/10).toString().replace('.', ',');
 /* ================= состояние ================= */
 const S = {
   api: '', token: '', me: null, settings: null,
-  people: [], marks: [], awards: [], topics: [], birthdays: [], clubAwards: [],
+  people: [], marks: [], awards: [], topics: [], birthdays: [], clubAwards: [], school: [],
   marksIdx: {}, tab: '', day: todayStr(), month: todayStr().slice(0,7),
   from: '', to: '', sort: 'miss', openStudent: '', busy: false,
-  fTeam: '', fCat: '', fRole: '', q: ''
+  fTeam: '', fCat: '', fRole: '', fYear: '', q: ''
 };
 
 function api(fn, args){
@@ -783,6 +793,9 @@ function apply(st){
   S.topics = st.topics || [];
   S.birthdays = st.birthdays || [];      // ученику присылают дни рождения товарищей
   S.clubAwards = st.clubAwards || [];    // и общую сводку наград кружка
+  S.school = st.school || [];            // достижения школы по командам и годам
+  S.version = st.version || '';
+  S.stats = st.stats || null;
   reindex();
   LS.set(K_CACHE, st);          // чтобы в следующий раз открылось мгновенно
   if(!S.from){
@@ -815,7 +828,18 @@ function tabList(){
           ['calendar','Календарь'], ['plan','План и темы']];
 }
 
+function versionWarning(){
+  const v = S.version || '';
+  if(!v) return '<div class="msg warn">Серверный код устарел (в нём нет даже метки версии). ' +
+    'Обновите Code.gs в Apps Script и выпустите новую версию развёртывания — иначе дни рождения, ' +
+    'календарь и сводка достижений работать не будут.</div>';
+  if(v < NEED_VERSION) return '<div class="msg warn">Серверный код старее сайта: ' + esc(v) +
+    ', нужен ' + NEED_VERSION + '. Обновите Code.gs в Apps Script и выпустите новую версию развёртывания.</div>';
+  return '';
+}
+
 function render(){
+  document.getElementById('warn').innerHTML = versionWarning();
   document.getElementById('topName').textContent = S.settings.groupName || 'Кружок';
   const tabs = tabList();
   document.getElementById('tabs').innerHTML = tabs.map(([k,label]) =>
@@ -848,8 +872,8 @@ function viewDay(){
     const m = markOf(ds, p.id);
     const cur = m ? m.s : '';
     const seg = ['p','l','e','a'].map(s =>
-      '<button data-s="' + s + '" class="' + (cur===s?'on':'') + '" data-act="mark" data-id="' + p.id + '">' +
-      ST[s].name + '</button>').join('');
+      '<button data-s="' + s + '" class="' + (cur===s?'on':'') + (m && m.pending ? ' pending' : '') +
+      '" data-act="mark" data-id="' + p.id + '">' + ST[s].name + '</button>').join('');
     const showH = (cur==='p'||cur==='l') && plan > 0;
     const hours = showH
       ? '<input class="in hin" type="number" min="0" step="0.5" max="' + plan + '" value="' + nf(m.h) +
@@ -1309,6 +1333,93 @@ function moreNote(shown, total){
     '. Уточните поиск или фильтр, чтобы увидеть остальные' + (total !== shown ? ' (всего записей: ' + total + ')' : '') + '.</p>';
 }
 
+/* Командные достижения школы: по годам, командам и направлениям. */
+function schoolBlock(){
+  const all = (S.school || []);
+  if(!all.length) return isAdmin()
+    ? '<div class="sect"><h3>Достижения школы</h3><p class="muted">Пусто. Перенести из таблицы — ' +
+      'функция importSchoolAwards() в Apps Script, либо добавляйте по одной записи кнопкой ниже.</p>' +
+      '<button class="btn sm pri" data-act="school-form">Добавить достижение</button></div>' : '';
+
+  const years = S.fYear ? all.filter(r => r.year === S.fYear) : all;
+  const t = tally(years);
+  const byYear = groupTally(all, r => r.year).sort((a,b) => String(b.key).localeCompare(String(a.key)));
+  const byTeam = groupTally(years, r => r.team);
+  const byCat  = groupTally(years, r => r.category);
+  const yearsList = uniq(all.map(r => r.year)).sort().reverse();
+
+  const mini = (title, list) => '<div><h4 style="margin:0 0 8px;font-size:14px">' + title + '</h4>' +
+    '<div class="scroll"><table><tbody>' + list.map(g =>
+      '<tr><td>' + esc(g.key) + '</td>' + medalCells(g.t) + '</tr>').join('') +
+    '</tbody></table></div></div>';
+
+  return '<div class="sect"><div class="head"><h3>Достижения школы</h3>' +
+      '<div class="row" style="gap:6px">' +
+        '<select class="in" style="width:auto" data-act="f-year">' +
+          '<option value="">Все годы</option>' +
+          yearsList.map(y => '<option value="' + y + '"' + (S.fYear===y?' selected':'') + '>' + y + '</option>').join('') +
+        '</select>' +
+        (isStaff() ? '<button class="btn sm pri" data-act="school-form">Добавить</button>' : '') +
+      '</div></div>' +
+
+    '<div class="cards" style="margin-bottom:14px">' +
+      tile(t.gold, '', '🥇 Первых мест') +
+      tile(t.silver, '', '🥈 Вторых мест') +
+      tile(t.bronze, '', '🥉 Третьих мест') +
+      tile(t.honor, '', '★ Наград') +
+      tile(byTeam.length, '', 'Команд') +
+      tile(years.length, '', 'Всего записей') +
+    '</div>' +
+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px">' +
+      mini('По годам', byYear) + mini('По командам', byTeam) + mini('По направлениям', byCat) +
+    '</div>' +
+
+    '<details style="margin-top:16px"><summary class="muted small" style="cursor:pointer">' +
+      'Все записи (' + years.length + ')</summary>' +
+      '<div class="scroll" style="margin-top:10px"><table><thead><tr>' +
+        '<th>Год</th><th>Направление</th><th>Соревнование</th><th>Команда</th><th>Награда</th>' +
+        (isStaff() ? '<th></th>' : '') + '</tr></thead><tbody>' +
+        years.slice().sort((a,b) => String(b.year).localeCompare(String(a.year))).map(r =>
+          '<tr><td>' + esc(r.year) + '</td><td class="muted small">' + esc(r.category) + '</td>' +
+          '<td>' + esc(r.event) + '</td><td><span class="chip">' + esc(r.team) + '</span></td>' +
+          '<td>' + (r.result ? '<span class="mx ' + r.result + '" style="margin-right:6px">' +
+            (RES_SHORT[r.result] || '•') + '</span>' : '') + esc(r.award) + '</td>' +
+          (isStaff() ? '<td><div class="row" style="gap:4px">' +
+            '<button class="btn sm" data-act="school-form" data-id="' + esc(r.id) + '">Изм.</button>' +
+            '<button class="btn sm danger" data-act="school-del" data-id="' + esc(r.id) + '">✕</button></div></td>' : '') +
+          '</tr>').join('') +
+      '</tbody></table></div></details></div>';
+}
+
+function schoolForm(id){
+  const r = id ? (S.school || []).find(x => x.id === id) : null;
+  const dl = (name, list) => '<datalist id="' + name + '">' +
+    uniq((S.school || []).map(x => x[name.replace('dl','').toLowerCase()])).map(v =>
+      '<option value="' + esc(v) + '">').join('') + '</datalist>';
+  modal('<h3>' + (r ? 'Изменить достижение школы' : 'Достижение школы') + '</h3>' +
+    '<div class="row">' +
+      '<div class="field" style="width:110px"><label>Год</label><input class="in" id="sYear" value="' +
+        esc(r ? r.year : String(new Date().getFullYear())) + '"></div>' +
+      '<div class="field grow"><label>Направление</label><input class="in" id="sCat" list="dlCategory" value="' +
+        esc(r ? r.category : '') + '"></div>' +
+      '<div class="field grow"><label>Команда</label><input class="in" id="sTeam" list="dlTeam" value="' +
+        esc(r ? r.team : '') + '"></div>' +
+    '</div>' +
+    '<div class="field"><label>Соревнование</label><input class="in" id="sEvent" list="dlEvent" value="' +
+      esc(r ? r.event : '') + '"></div>' +
+    '<div class="row">' +
+      '<div class="field grow"><label>Награда, как в дипломе</label><input class="in" id="sAward" value="' +
+        esc(r ? r.award : '') + '"></div>' +
+      '<div class="field" style="width:170px"><label>Засчитать как</label><select class="in" id="sRes">' +
+        '<option value="">—</option>' + Object.keys(RESULTS).map(k =>
+          '<option value="' + k + '"' + (r && r.result === k ? ' selected' : '') + '>' + RESULTS[k] + '</option>').join('') +
+      '</select></div>' +
+    '</div>' +
+    dl('dlCategory') + dl('dlTeam') + dl('dlEvent') +
+    '<button class="btn pri" data-act="school-save" data-id="' + (id || '') + '">Сохранить</button>');
+}
+
 function viewExtra(){
   const vis = {};
   visible(true).forEach(p => { vis[p.id] = p; });
@@ -1357,6 +1468,9 @@ function viewExtra(){
       tile(people.length, '', 'Призёров и участников') +
     '</div>' +
 
+    schoolBlock() +
+
+    '<h3 style="margin:22px 0 12px">Личные достижения учеников</h3>' +
     table('Медальный зачёт учеников', people, 'Ученик', 10) +
     table('По командам', teams_, 'Команда') +
     table('По уровню соревнований', levels, 'Уровень') +
@@ -1704,6 +1818,23 @@ function viewSettings(){
       '<p class="small muted" style="margin:10px 0 0">Помощник может отмечать посещаемость, добавлять учеников, олимпиады и темы. ' +
       'Менять настройки, роли и удалять данные может только администратор.</p></div>' +
 
+    '<div class="sect"><h3>Проверка сервера</h3>' +
+      '<table><tbody>' +
+        '<tr><td>Версия серверного кода</td><td><b>' + (S.version || 'нет метки — код устарел') + '</b>' +
+          (S.version === NEED_VERSION ? ' <span class="chip done">актуальна</span>'
+                                      : ' <span class="chip coral">нужна ' + NEED_VERSION + '</span>') + '</td></tr>' +
+        (S.stats ? '<tr><td>Учеников в составе</td><td>' + S.stats.students + '</td></tr>' +
+          '<tr><td>С заполненной датой рождения</td><td>' + S.stats.withBirth +
+            (S.stats.withBirth === 0 ? ' <span class="chip coral">запустите importBirthdays</span>' : '') + '</td></tr>' +
+          '<tr><td>Записей о наградах</td><td>' + S.stats.awards + '</td></tr>' +
+          '<tr><td>Соревнований в календаре</td><td>' + S.stats.competitions + '</td></tr>' +
+          '<tr><td>Пунктов годового плана</td><td>' + S.stats.plan + '</td></tr>' +
+          '<tr><td>Достижений школы</td><td>' + (S.stats.school || 0) +
+            (!S.stats.school ? ' <span class="chip coral">запустите importSchoolAwards</span>' : '') + '</td></tr>' : '') +
+      '</tbody></table>' +
+      '<div class="row" style="margin-top:12px"><button class="btn sm" data-act="ping">Замерить скорость</button>' +
+        '<span id="pingOut" class="muted small"></span></div></div>' +
+
     '<div class="sect"><h3>Мой код входа</h3><div class="row">' +
       '<input class="in" style="width:auto" id="pinOld" type="password" placeholder="Текущий код">' +
       '<input class="in" style="width:auto" id="pinNew" type="password" placeholder="Новый код (4–8 цифр)">' +
@@ -1814,6 +1945,21 @@ async function act(a, el, ev){
   }
   case 'sort': S.sort = el.dataset.k; render(); break;
   case 'f-clear': S.fTeam = ''; S.fCat = ''; render(); break;
+  case 'school-form': schoolForm(el.dataset.id || ''); break;
+  case 'school-save': {
+    const rec = { id: el.dataset.id || '', year: val('sYear'), category: val('sCat'),
+                  event: val('sEvent'), team: val('sTeam'), award: val('sAward'), result: val('sRes') };
+    if(!rec.award && !rec.event){ say('Укажите соревнование или награду.', 'err'); return; }
+    const r = await call('saveSchoolAward', [S.token, rec], 'Сохранено');
+    if(r.ok){ S.school = S.school.filter(x => x.id !== r.v.id).concat([r.v]); closeModal(); render(); }
+    break;
+  }
+  case 'school-del': {
+    if(!confirm('Удалить запись о достижении школы?')) return;
+    const r = await call('deleteSchoolAward', [S.token, el.dataset.id], 'Удалено');
+    if(r.ok){ S.school = S.school.filter(x => x.id !== el.dataset.id); render(); }
+    break;
+  }
   case 'plan-role': S.fRole = el.dataset.r; render(); break;
   case 'plan-assign':
     topicForm('', '', { title: el.dataset.t, subject: 'План года · ' + el.dataset.r + ' · неделя ' + el.dataset.n,
@@ -2021,6 +2167,16 @@ async function act(a, el, ev){
   }
 
   case 'hard-reload': hardReload(); break;
+  case 'ping': {
+    const out = document.getElementById('pingOut');
+    out.textContent = 'меряем…';
+    const t0 = Date.now();
+    try { await api('boot', []); } catch(e){ out.textContent = 'ошибка: ' + e.message; return; }
+    const first = Date.now() - t0, t1 = Date.now();
+    try { await api('state', [S.token]); } catch(e){}
+    out.textContent = 'список входа ' + first + ' мс, полные данные ' + (Date.now() - t1) + ' мс';
+    break;
+  }
 
   /* --- адрес сервера --- */
   case 'change-api': {
@@ -2040,13 +2196,37 @@ async function act(a, el, ev){
   }
 }
 
+let inFlight = 0;
+function syncBadge(){
+  const el = document.getElementById('sync');
+  if(el) el.classList.toggle('hide', inFlight <= 0);
+}
+
+/* Отметка появляется мгновенно, запрос уходит следом.
+   Если сервер не принял — возвращаем как было и говорим об этом. */
 async function putMark(ds, uid, status, hours, note){
-  const r = await call('setMark', [S.token, ds, uid, status, hours, note || '']);
-  if(!r.ok) return;
-  S.marks = S.marks.filter(m => !(m.d === ds && m.u === uid));
-  if(r.v) S.marks.push(r.v);
-  reindex();
-  render();
+  const prev = markOf(ds, uid);
+  const drop = () => { S.marks = S.marks.filter(m => !(m.d === ds && m.u === uid)); };
+
+  drop();
+  if(status !== 'clear') S.marks.push({ d:ds, u:uid, s:status, h:hours, n:note || '', pending:true });
+  reindex(); render();
+
+  inFlight++; syncBadge();
+  try {
+    const v = await api('setMark', [S.token, ds, uid, status, hours, note || '']);
+    drop();
+    if(v) S.marks.push(v);
+  } catch(e){
+    drop();
+    if(prev) S.marks.push(prev);
+    if(String(e.message) === 'AUTH') logout(true);
+    else if(e.stale) handleStale('banner');
+    else say('Не сохранилось: ' + e.message, 'err');
+  } finally {
+    inFlight--; syncBadge();
+    reindex(); render();
+  }
 }
 
 document.addEventListener('click', ev => {
@@ -2073,7 +2253,8 @@ document.addEventListener('change', ev => {
   const el = ev.target.closest('[data-act]');
   if(!el) return;
   const a = el.dataset.act;
-  if(a === 'f-team'){ S.fTeam = el.value; render(); }
+  if(a === 'f-year'){ S.fYear = el.value; render(); }
+  else if(a === 'f-team'){ S.fTeam = el.value; render(); }
   else if(a === 'f-cat'){ S.fCat = el.value; render(); }
   else if(a === 'tp-target'){
     const mode = el.value;
