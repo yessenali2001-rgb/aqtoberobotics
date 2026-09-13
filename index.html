@@ -370,7 +370,7 @@ img.ava{display:block}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-16';
+const SITE_BUILD = '2026-09-16-2';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
@@ -426,7 +426,7 @@ const S = {
   people: [], marks: [], awards: [], topics: [], birthdays: [], clubAwards: [], school: [],
   marksIdx: {}, tab: '', day: todayStr(), month: todayStr().slice(0,7),
   from: '', to: '', sort: 'miss', openStudent: '', busy: false,
-  fTeam: '', fCat: '', fRole: '', fYear: '', q: ''
+  fTeam: '', fCat: '', fRole: '', fYear: '', q: '', showArchive: false
 };
 
 function api(fn, args){
@@ -1359,7 +1359,8 @@ function showPins(list, title){
 /* ================= УЧЕНИКИ ================= */
 function viewPeople(){
   if(S.openStudent) return viewStudentCard(S.openStudent);
-  const list = visible(true);
+  const archived = visible(true).filter(p => !p.active);
+  const list = S.showArchive ? visible(true) : visible();
   const body = list.map(p => {
     const st = statsFor(p.id, S.from, S.to);
     return '<tr>' +
@@ -1384,7 +1385,11 @@ function viewPeople(){
   const dl = '<datalist id="teamList">' + teams().map(t => '<option value="' + esc(t) + '">').join('') + '</datalist>' +
              '<datalist id="catList">' + cats().map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>';
 
-  return '<div class="head"><h2>Ученики <span class="muted small">(' + students().length + ' активных)</span></h2></div>' +
+  return '<div class="head"><h2>Ученики <span class="muted small">(' + visible().length + ')</span></h2>' +
+      (archived.length
+        ? '<button class="btn sm" data-act="toggle-archive">' +
+          (S.showArchive ? 'Скрыть архив' : 'Показать архив (' + archived.length + ')') + '</button>'
+        : '') + '</div>' +
     filterBar() + dl +
     '<div class="sect"><h3>Добавить ученика</h3>' +
       '<div class="row">' +
@@ -2273,6 +2278,7 @@ async function act(a, el, ev){
   /* --- ученики --- */
   case 'open-student': ev.preventDefault(); S.openStudent = el.dataset.id; S.tab = 'people'; render(); break;
   case 'back-people': S.openStudent = ''; render(); break;
+  case 'toggle-archive': S.showArchive = !S.showArchive; render(); break;
   case 'add-student': {
     const name = val('newName');
     if(!name){ say('Введите имя.', 'err'); return; }
