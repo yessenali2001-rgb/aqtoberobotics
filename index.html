@@ -370,7 +370,7 @@ img.ava{display:block}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-16-2';
+const SITE_BUILD = '2026-09-16-3';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
@@ -443,7 +443,14 @@ function api(fn, args){
     })
     .catch(e => { if(e instanceof SyntaxError) throw new Error('Сервер вернул непонятный ответ. Проверьте адрес /exec.'); throw (e.message ? e : new Error('Нет связи с сервером.')); })
     .then(d => {
-      if(!d.ok) throw new Error(d.error || 'Ошибка сервера.');
+      if(!d.ok){
+        const msg = String(d.error || 'Ошибка сервера.');
+        if(msg.indexOf('Неизвестная команда') === 0){
+          throw new Error('Эта возможность требует свежего Code.gs в Apps Script. ' +
+            'На сервере сейчас версия ' + (S.version || 'без метки') + ', нужна ' + NEED_VERSION + '.');
+        }
+        throw new Error(msg);
+      }
       if(d.result === undefined) throw new Error('Старое развёртывание Apps Script. Обновите версию веб-приложения.');
       return d.result;
     });
@@ -547,6 +554,9 @@ async function loadPhotos(){
     if(photoQueue.length) setTimeout(loadPhotos, 60);
   }
 }
+
+/* Фотографии умеет только свежий серверный код. */
+const photosReady = () => (S.version || '') >= '2026-09-16';
 
 const initials = name => String(name || '').trim().split(/\s+/).slice(0,2)
   .map(w => w.charAt(0)).join('');
@@ -1429,11 +1439,14 @@ function viewStudentCard(id){
       '<div><h2 style="margin:0">' + esc(p.name) + '</h2>' +
       (who(p) ? '<div class="muted small">' + esc(who(p)) +
         (p.teamRole ? ' · ' + (TEAM_ROLES[p.teamRole] || p.teamRole) : '') + '</div>' : '') +
-      (isStaff() ? '<div class="row" style="gap:6px;margin-top:8px">' +
-        '<button class="btn sm" data-act="photo-pick" data-id="' + p.id + '">' +
-          (photoOf(p.id) || (S.photoMap||{})[p.id] ? 'Заменить фото' : 'Добавить фото') + '</button>' +
-        ((S.photoMap||{})[p.id] ? '<button class="btn sm danger" data-act="photo-del" data-id="' +
-          p.id + '">Убрать</button>' : '') + '</div>' : '') +
+      (isStaff() ? (photosReady()
+        ? '<div class="row" style="gap:6px;margin-top:8px">' +
+            '<button class="btn sm" data-act="photo-pick" data-id="' + p.id + '">' +
+              (photoOf(p.id) || (S.photoMap||{})[p.id] ? 'Заменить фото' : 'Добавить фото') + '</button>' +
+            ((S.photoMap||{})[p.id] ? '<button class="btn sm danger" data-act="photo-del" data-id="' +
+              p.id + '">Убрать</button>' : '') + '</div>'
+        : '<div class="small muted" style="margin-top:8px">Фотографии заработают после обновления ' +
+          'Code.gs в Apps Script</div>') : '') +
       '</div></div>' +
       '<button class="btn sm" data-act="back-people">← К списку</button></div>' +
 
