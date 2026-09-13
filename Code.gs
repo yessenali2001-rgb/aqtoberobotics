@@ -10,6 +10,7 @@
  *  Установка описана в attendance/README.md
  *************************************************************/
 
+var VERSION = '2026-09-13-2';         // метка версии кода: видна в ответе сервера
 var SHEET_ID = '';                    // пусто = скрипт привязан к таблице
 var FIRST_ADMIN_NAME = 'Администратор';
 var SESSION_DAYS = 90;                // сколько дней держится вход
@@ -329,7 +330,7 @@ API.boot = function () {
     .filter(function (p) { return String(p.active) !== '0'; })
     .map(function (p) { return { id: String(p.id), name: String(p.name), role: String(p.role) }; })
     .sort(function (a, b) { return a.name.localeCompare(b.name, 'ru'); });
-  var out = { groupName: s.groupName, roster: roster, needSetup: roster.length === 0 };
+  var out = { groupName: s.groupName, roster: roster, needSetup: roster.length === 0, version: VERSION };
   if (cache) { try { cache.put('boot', JSON.stringify(out), 300); } catch (e) {} }
   return out;
 };
@@ -672,7 +673,8 @@ function doGet(e) {
   var out;
   try {
     var raw = (e && e.parameter && e.parameter.p) || '';
-    if (!raw) return json_({ ok: true, hello: 'Сервер посещаемости работает. Вставьте этот адрес в index.html.' });
+    if (!raw) return json_({ ok: true, version: VERSION,
+      hello: 'Сервер посещаемости работает. Вставьте этот адрес в index.html.' });
     var p = JSON.parse(raw);
     var fn = p.fn, args = p.args || [];
     if (!API.hasOwnProperty(fn)) throw new Error('Неизвестная команда: ' + fn);
