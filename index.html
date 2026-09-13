@@ -105,6 +105,12 @@ body.dark .top{background:#08081A}
 .msg.warn{background:rgba(201,178,145,.18); border-color:var(--gold)}
 .msg.bday{background:rgba(201,178,145,.22); border-color:var(--gold); font-size:15px}
 .msg.bdaysoon{background:var(--sunk); border-color:var(--line); color:var(--muted)}
+.strip{display:flex; gap:10px 26px; flex-wrap:wrap; align-items:center; cursor:pointer;
+       padding:10px 14px; border-radius:10px; margin-bottom:14px; font-size:14px;
+       background:var(--sunk); border:1px solid var(--line); color:var(--muted)}
+.strip b{color:var(--ink); font-weight:600}
+.strip.hot{background:rgba(201,178,145,.22); border-color:var(--gold); color:var(--ink)}
+.strip:hover{border-color:var(--line2)}
 .comp{border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:10px; background:var(--sunk)}
 .comp.soon{border-color:var(--gold); background:rgba(201,178,145,.12)}
 .comp h4{margin:0 0 4px; font-size:16px; font-weight:650}
@@ -315,7 +321,7 @@ body.dark .sync{background:var(--gold); color:var(--navy)}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-14-4';
+const SITE_BUILD = '2026-09-14-5';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
@@ -480,17 +486,46 @@ function bdayList(){
     .filter(x => x.b).sort((a, b) => a.b.days - b.b.days);
 }
 
-/* Полоса, которая видна на любой вкладке. */
-function bdayBanner(){
+/* Полоса, которая видна на любой вкладке: день рождения и ближайший старт. */
+function bdayPart(){
   const list = bdayList();
-  if(!list.length) return '';
+  if(!list.length) return null;
   const today = list.filter(x => x.b.days === 0);
-  if(today.length) return '<div class="msg bday">🎂 Сегодня день рождения: ' +
-    today.map(x => '<b>' + esc(x.p.name) + '</b> — ' + yearsWord(x.b.age)).join(', ') +
-    '. Не забудьте поздравить!</div>';
+  if(today.length) return { hot:true, html:'🎂 Сегодня день рождения: ' +
+    today.map(x => '<b>' + esc(x.p.name) + '</b> — ' + yearsWord(x.b.age)).join(', ') + '. Поздравьте!' };
   const n = list[0];
-  return '<div class="msg bdaysoon">🎂 Ближайший день рождения: <b>' + esc(n.p.name) + '</b>, ' +
-    dayMonth(n.b.date) + ' — ' + daysWord(n.b.days) + ' (' + yearsWord(n.b.age) + ')</div>';
+  return { hot:false, html:'🎂 Ближайший день рождения: <b>' + esc(n.p.name) + '</b>, ' +
+    dayMonth(n.b.date) + ' — ' + daysWord(n.b.days) + ' (' + yearsWord(n.b.age) + ')' };
+}
+
+/* Ближайшее соревнование, которое ещё впереди. */
+function nextComp(){
+  return compList().find(c => {
+    if(c.status === 'done' || c.status === 'skip') return false;
+    const d = compDays(c);
+    return d !== null && d >= 0;
+  }) || null;
+}
+
+function compPart(){
+  const c = nextComp();
+  if(!c) return null;
+  const days = compDays(c);
+  const mine = !isStaff() && (c.members || []).indexOf(S.me.id) >= 0;
+  const squad = (c.members || []).length;
+  const tail = mine ? ' · <b>вы в составе</b>'
+    : (isStaff() && squad ? ' · состав: ' + squad : '');
+  if(days === 0) return { hot:true, html:'🏆 Сегодня старт: <b>' + esc(c.title) + '</b>' + tail };
+  return { hot: days <= 14, html:'🏆 Ближайший старт: <b>' + esc(c.title) + '</b>, ' +
+    (c.dateFrom ? dayMonth(c.dateFrom) : esc(c.when)) + ' — ' + daysWord(days) + tail };
+}
+
+function bdayBanner(){
+  const parts = [bdayPart(), compPart()].filter(Boolean);
+  if(!parts.length) return '';
+  const hot = parts.some(x => x.hot);
+  return '<div class="strip' + (hot ? ' hot' : '') + '" data-act="go-calendar">' +
+    parts.map(x => '<span>' + x.html + '</span>').join('') + '</div>';
 }
 
 /* ================= сводка достижений ================= */
@@ -2199,6 +2234,7 @@ async function act(a, el, ev){
     break;
   }
 
+  case 'go-calendar': S.tab = 'calendar'; S.openStudent = ''; render(); break;
   case 'hard-reload': hardReload(); break;
   case 'ping': {
     const out = document.getElementById('pingOut');
