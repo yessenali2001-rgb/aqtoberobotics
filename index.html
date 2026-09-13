@@ -1,0 +1,1699 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#121233">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Посещаемость">
+<title>Посещаемость кружка — БІЛІМ-ИННОВАЦИЯ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="assets/icon-192.png">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<style>
+/* ===== фирменные цвета брендбука МОФ «БІЛІМ-ИННОВАЦИЯ» ===== */
+:root{
+  --navy:#121233; --gold:#C9B291; --blue:#6490E8; --coral:#FF674D; --yellow:#F7DE82;
+  --bg:#F4F1EB; --panel:#FFFFFF; --sunk:#FAF8F5; --line:#E4DED2; --line2:#CFC6B6;
+  --ink:#121233; --muted:#6E6E88; --onbrand:#FFFFFF;
+  --shadow:0 1px 2px rgba(18,18,51,.06), 0 8px 24px rgba(18,18,51,.06);
+  --radius:14px;
+}
+body.dark{
+  --bg:#0C0C1E; --panel:#181832; --sunk:#13132A; --line:#272748; --line2:#3A3A62;
+  --ink:#ECEAF4; --muted:#9C9CBE; --onbrand:#121233;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:-apple-system, "SF Pro Display", BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  font-size:15px; line-height:1.5; -webkit-text-size-adjust:100%;
+}
+button,input,select,textarea{font:inherit; color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
+.hide{display:none !important}
+h1,h2,h3{letter-spacing:-.02em; margin:0}
+a{color:var(--blue)}
+
+/* ===== элементы формы ===== */
+.in, select.in, textarea.in{
+  width:100%; padding:10px 12px; background:var(--sunk); color:var(--ink);
+  border:1px solid var(--line); border-radius:10px; outline:none;
+}
+.in:focus{border-color:var(--blue)}
+textarea.in{min-height:80px; resize:vertical}
+.btn{
+  padding:10px 16px; border-radius:10px; border:1px solid var(--line2);
+  background:var(--panel); color:var(--ink); font-weight:500;
+}
+.btn:hover{border-color:var(--ink)}
+.btn.pri{background:var(--navy); color:#fff; border-color:var(--navy)}
+body.dark .btn.pri{background:var(--gold); color:var(--navy); border-color:var(--gold)}
+.btn.pri:hover{opacity:.9}
+.btn.sm{padding:6px 10px; font-size:13px; border-radius:8px}
+.btn.danger{color:var(--coral); border-color:var(--coral)}
+.row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+.grow{flex:1; min-width:150px}
+.field{margin-bottom:12px}
+.field label{display:block; font-size:13px; color:var(--muted); margin-bottom:5px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.nowrap{white-space:nowrap}
+
+/* ===== вход ===== */
+.gate{max-width:430px; margin:0 auto; padding:8vh 20px 40px}
+.gate .logo{display:block; width:100%; max-width:330px; margin:0 auto 26px}
+.card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+      box-shadow:var(--shadow); padding:20px}
+.gate h1{font-size:22px; margin-bottom:4px}
+.gate .lead{color:var(--muted); margin:0 0 18px}
+.pin{letter-spacing:.4em; text-align:center; font-size:20px}
+
+/* ===== шапка ===== */
+.top{background:var(--navy); color:#fff; padding:10px 0; position:sticky; top:0; z-index:30}
+body.dark .top{background:#08081A}
+.topin{max-width:1140px; margin:0 auto; padding:0 16px; display:flex; align-items:center; gap:14px}
+.top img{height:36px; width:auto; flex:none}
+.top .brand{display:flex; flex-direction:column; line-height:1.2; min-width:0}
+.top .brand b{font-size:15.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.top .brand span{font-size:10.5px; color:var(--gold); letter-spacing:.06em; text-transform:uppercase}
+.top .who{margin-left:auto; text-align:right; line-height:1.25; font-size:13px; min-width:0}
+.top .who b{display:block; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.top .who span{color:#C9B291}
+.iconbtn{background:rgba(255,255,255,.1); border:0; color:#fff; width:36px; height:36px;
+         border-radius:10px; flex:none; font-size:16px}
+.iconbtn:hover{background:rgba(255,255,255,.2)}
+
+.wrap{max-width:1140px; margin:0 auto; padding:18px 16px 80px}
+.tabs{display:flex; gap:2px; margin-bottom:18px; border-bottom:1px solid var(--line); overflow-x:auto}
+.tab{background:none; border:0; color:var(--muted); padding:10px 14px; white-space:nowrap;
+     border-bottom:2px solid transparent; margin-bottom:-1px; font-weight:500}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--ink); border-bottom-color:var(--gold)}
+
+.msg{padding:10px 14px; border-radius:10px; font-size:14px; margin-bottom:14px; border:1px solid transparent}
+.msg.err{background:rgba(255,103,77,.12); color:var(--coral); border-color:rgba(255,103,77,.35)}
+.msg.ok{background:rgba(100,144,232,.12); color:var(--blue); border-color:rgba(100,144,232,.35)}
+.msg.warn{background:rgba(201,178,145,.18); border-color:var(--gold)}
+
+.head{display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px}
+.head h2{font-size:20px}
+.sect{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+      box-shadow:var(--shadow); padding:16px; margin-bottom:16px}
+.sect h3{font-size:16px; margin-bottom:12px}
+
+/* ===== плитки статистики ===== */
+.cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:16px}
+.tile{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px}
+.tile b{display:block; font-size:26px; font-weight:650; letter-spacing:-.03em; font-variant-numeric:tabular-nums}
+.tile b i{font-size:14px; font-style:normal; color:var(--muted); font-weight:500}
+.tile span{font-size:12.5px; color:var(--muted)}
+
+/* ===== журнал дня ===== */
+.daybar{display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap}
+.plist{list-style:none; margin:0; padding:0}
+.plist li{display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px solid var(--line); flex-wrap:wrap}
+.plist li:first-child{border-top:0}
+.pname{flex:1; min-width:130px; font-weight:500}
+.pname i{display:block; font-style:normal; font-size:12px; color:var(--muted); font-weight:400}
+.seg{display:flex; gap:0; border:1px solid var(--line2); border-radius:10px; overflow:hidden; flex:none}
+.seg button{background:var(--panel); border:0; padding:7px 11px; font-size:13px; color:var(--muted);
+            border-left:1px solid var(--line)}
+.seg button:first-child{border-left:0}
+.seg button.on{color:#fff; font-weight:600}
+.seg button.on[data-s="p"]{background:var(--blue)}
+.seg button.on[data-s="l"]{background:var(--yellow); color:var(--navy)}
+.seg button.on[data-s="e"]{background:var(--gold); color:var(--navy)}
+.seg button.on[data-s="a"]{background:var(--coral)}
+.hin{width:74px; text-align:center}
+
+/* ===== таблица-сетка ===== */
+.scroll{overflow-x:auto; -webkit-overflow-scrolling:touch}
+table{border-collapse:collapse; width:100%; font-size:14px}
+th,td{padding:8px 10px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap}
+th{font-size:12.5px; color:var(--muted); font-weight:600; position:sticky; top:0; background:var(--panel)}
+th.sortable{cursor:pointer}
+th.sortable:hover{color:var(--ink)}
+td.num,th.num{text-align:right; font-variant-numeric:tabular-nums}
+tbody tr:hover{background:var(--sunk)}
+.grid td,.grid th{padding:4px; text-align:center}
+.grid .stick{position:sticky; left:0; background:var(--panel); text-align:left; z-index:2;
+             box-shadow:1px 0 0 var(--line); max-width:170px; overflow:hidden; text-overflow:ellipsis}
+.cell{display:inline-flex; width:26px; height:26px; align-items:center; justify-content:center;
+      border-radius:7px; font-size:12px; font-weight:600; border:1px solid var(--line); background:var(--sunk); color:var(--muted)}
+.cell.p{background:var(--blue); color:#fff; border-color:transparent}
+.cell.l{background:var(--yellow); color:var(--navy); border-color:transparent}
+.cell.e{background:var(--gold); color:var(--navy); border-color:transparent}
+.cell.a{background:var(--coral); color:#fff; border-color:transparent}
+button.cell{cursor:pointer}
+.mx{display:inline-flex; min-width:26px; height:24px; padding:0 6px; align-items:center; justify-content:center;
+    border-radius:7px; font-size:12px; font-weight:600; background:var(--sunk); border:1px solid var(--line); color:var(--muted)}
+.mx.gold{background:#C9B291; color:#121233; border-color:transparent}
+.mx.silver{background:#D9D9E3; color:#121233; border-color:transparent}
+.mx.bronze{background:#E8C4A0; color:#121233; border-color:transparent}
+.mx.honor{background:rgba(100,144,232,.18); color:var(--blue); border-color:transparent}
+.mx.part{background:transparent}
+.legend{display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px; color:var(--muted); margin-top:10px}
+.legend span{display:flex; align-items:center; gap:6px}
+.dot{width:12px; height:12px; border-radius:4px; display:inline-block}
+
+.pctcell{min-width:170px}
+.nowrapflex{flex-wrap:nowrap; gap:8px}
+.bar{height:7px; background:var(--sunk); border:1px solid var(--line); border-radius:99px; overflow:hidden; min-width:70px}
+.bar i{display:block; height:100%; background:var(--blue)}
+
+.chip{display:inline-block; padding:2px 9px; border-radius:99px; font-size:12px; border:1px solid var(--line2); color:var(--muted)}
+.chip.gold{background:var(--gold); color:var(--navy); border-color:transparent; font-weight:600}
+.chip.blue{background:rgba(100,144,232,.16); color:var(--blue); border-color:transparent}
+.chip.coral{background:rgba(255,103,77,.16); color:var(--coral); border-color:transparent}
+.chip.done{background:rgba(100,144,232,.16); color:var(--blue); border-color:transparent}
+
+.calendar{display:grid; grid-template-columns:repeat(7,1fr); gap:5px; max-width:430px}
+.calendar .cd{aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+              border-radius:9px; font-size:12px; border:1px solid var(--line); background:var(--sunk); color:var(--muted)}
+.calendar .cd.off{opacity:.35}
+.calendar .cd.p{background:var(--blue); color:#fff; border-color:transparent}
+.calendar .cd.l{background:var(--yellow); color:var(--navy); border-color:transparent}
+.calendar .cd.e{background:var(--gold); color:var(--navy); border-color:transparent}
+.calendar .cd.a{background:var(--coral); color:#fff; border-color:transparent}
+.calendar .wd{font-size:11px; color:var(--muted); text-align:center}
+
+/* ===== модальное окно ===== */
+.modal{position:fixed; inset:0; background:rgba(18,18,51,.55); display:flex; align-items:flex-start;
+       justify-content:center; padding:20px; overflow-y:auto; z-index:60}
+.modal .box{background:var(--panel); border-radius:var(--radius); max-width:720px; width:100%;
+            padding:20px; box-shadow:var(--shadow); margin:auto}
+.modal h3{margin-bottom:12px}
+.pinlist{font-size:15px; margin:0; padding:0; list-style:none}
+.pinlist li{display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid var(--line)}
+.pinlist b{font-variant-numeric:tabular-nums; letter-spacing:.12em}
+
+.foot{text-align:center; color:var(--muted); font-size:12px; padding:24px 16px 40px}
+.foot img{height:26px; opacity:.75; display:block; margin:0 auto 8px}
+
+@media (max-width:620px){
+  .top img{height:30px}
+  .top .who{font-size:12px; max-width:34%}
+  .top .brand span{display:none}
+  .wrap{padding:14px 12px 70px}
+  .tile b{font-size:22px}
+  .plist li{gap:8px}
+  .pname{min-width:100%}
+}
+</style>
+</head>
+<body>
+
+<!-- ЭКРАН НАСТРОЙКИ АДРЕСА СЕРВЕРА -->
+<div id="setup" class="gate hide">
+  <img class="logo" src="assets/logo-full.png" alt="БІЛІМ-ИННОВАЦИЯ">
+  <div class="card">
+    <h1>Подключение к таблице</h1>
+    <p class="lead">Вставьте адрес развёртывания Google Apps Script (оканчивается на <b>/exec</b>). Инструкция — в файле README.md.</p>
+    <div class="field">
+      <label for="apiUrl">Адрес веб-приложения</label>
+      <input id="apiUrl" class="in" placeholder="https://script.google.com/macros/s/.../exec">
+    </div>
+    <button class="btn pri" id="apiSave" style="width:100%">Сохранить и подключиться</button>
+    <p id="setupMsg" class="small muted" style="margin:12px 0 0"></p>
+  </div>
+</div>
+
+<!-- ЭКРАН ВХОДА -->
+<div id="gate" class="gate hide">
+  <img class="logo" src="assets/logo-full.png" alt="БІЛІМ-ИННОВАЦИЯ">
+  <div class="card">
+    <h1 id="gateTitle">Посещаемость кружка</h1>
+    <p class="lead">Выберите себя в списке и введите свой код.</p>
+    <div id="gateMsg"></div>
+    <div class="field">
+      <label for="who">Кто вы</label>
+      <select id="who" class="in"></select>
+    </div>
+    <div class="field">
+      <label for="pin">Код</label>
+      <input id="pin" class="in pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="••••">
+    </div>
+    <button class="btn pri" id="doLogin" style="width:100%">Войти</button>
+    <p class="small muted" style="margin:14px 0 0">Код выдаёт руководитель кружка. Забыли — попросите сбросить.</p>
+    <p class="small muted" style="margin:8px 0 0;text-align:center">
+      <button class="btn sm" data-act="change-api" style="border:0;background:none;text-decoration:underline;color:inherit;padding:0">
+        Изменить адрес сервера</button></p>
+  </div>
+</div>
+
+<!-- ПРИЛОЖЕНИЕ -->
+<div id="app" class="hide">
+  <div class="top">
+    <div class="topin">
+      <img id="topLogo" src="assets/logo-mark-inverse.png" alt="БІЛІМ-ИННОВАЦИЯ">
+      <div class="brand">
+        <b id="topName">Кружок</b>
+        <span>МОФ «БІЛІМ-ИННОВАЦИЯ»</span>
+      </div>
+      <div class="who">
+        <b id="meName">—</b>
+        <span id="meRole">—</span>
+      </div>
+      <button class="iconbtn" id="themeBtn" title="Тема">◐</button>
+      <button class="iconbtn" id="outBtn" title="Выйти">⏻</button>
+    </div>
+  </div>
+  <div class="wrap">
+    <div id="banner"></div>
+    <div class="tabs" id="tabs"></div>
+    <div id="view"></div>
+  </div>
+  <div class="foot">
+    <img src="assets/logo-mark.png" alt="">
+    МОФ «БІЛІМ-ИННОВАЦИЯ» · учёт посещаемости кружка
+  </div>
+</div>
+
+<div id="modal"></div>
+
+<script>
+/* =====================================================================
+   Посещаемость кружка — клиентская часть
+   Данные хранятся в Google-таблице, доступ через Apps Script (Code.gs)
+   ===================================================================== */
+
+/* Можно вписать адрес прямо здесь (оканчивается на /exec),
+   либо оставить пустым и ввести его один раз в интерфейсе. */
+const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbwTUYTlNTY2pQ7aozkvAE65xK1Q9gshq4w_LnvO4YJYCbmXW-qwyJK_RlPv38UI5j86/exec';
+
+const LS = {
+  get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } },
+  set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} },
+  del(k){ try { localStorage.removeItem(k); } catch(e){} }
+};
+const K_API='attApi', K_TOKEN='attToken', K_CACHE='attCache', K_THEME='attTheme';
+
+/* ================= словари ================= */
+const WD_SHORT = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+const WD_FULL  = ['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+const WD_ORDER = [1,2,3,4,5,6,0];
+const MONTHS   = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const MON_GEN  = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+
+const ST = {
+  p:{ letter:'Б', name:'Был',      full:'Присутствовал' },
+  l:{ letter:'О', name:'Опоздал',  full:'Опоздал' },
+  e:{ letter:'У', name:'Уваж.',    full:'Пропуск по уважительной причине' },
+  a:{ letter:'Н', name:'Пропуск',  full:'Пропуск без причины' }
+};
+const LEVELS = { school:'Школьный', city:'Городской', region:'Областной', republic:'Республиканский', international:'Международный' };
+const RESULTS = { gold:'1 место', silver:'2 место', bronze:'3 место', honor:'Грамота', part:'Участие' };
+const RES_SHORT = { gold:'1', silver:'2', bronze:'3', honor:'★', part:'·' };
+const TSTAT = { todo:'Изучить', doing:'В процессе', done:'Освоено' };
+const ROLES = { admin:'Администратор', assistant:'Помощник', student:'Ученик' };
+const TEAM_ROLES = { captain:'Капитан', manager:'Менеджер', builder:'Билдер',
+                     programmer:'Программист', smm:'SMM', slider:'Дизайнер / слайды' };
+/* роли из годового плана → роли в команде */
+const PLAN_ROLE = { 'Captain':'captain', 'Manager':'manager', 'Builder':'builder',
+                    'Programmer':'programmer', 'SMM':'smm', 'Slider/Layer':'slider' };
+
+/* ================= даты ================= */
+const pad = n => String(n).padStart(2,'0');
+const fmt = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const parseD = s => { const p = String(s).split('-').map(Number); return new Date(p[0], p[1]-1, p[2]); };
+const addDays = (d,n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
+const todayStr = () => fmt(new Date());
+function rangeDays(a,b){ const o=[]; let d=parseD(a); const e=parseD(b); while(d<=e){ o.push(fmt(d)); d=addDays(d,1); } return o; }
+function human(ds){ const d=parseD(ds); return d.getDate()+' '+MON_GEN[d.getMonth()]+' '+d.getFullYear(); }
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nf = n => (Math.round(n*10)/10).toString().replace('.', ',');
+
+/* ================= состояние ================= */
+const S = {
+  api: '', token: '', me: null, settings: null,
+  people: [], marks: [], awards: [], topics: [],
+  marksIdx: {}, tab: '', day: todayStr(), month: todayStr().slice(0,7),
+  from: '', to: '', sort: 'miss', openStudent: '', busy: false,
+  fTeam: '', fCat: '', fRole: '', q: ''
+};
+
+function api(fn, args){
+  const url = S.api + '?p=' + encodeURIComponent(JSON.stringify({ fn, args: args||[] })) + '&_=' + Date.now();
+  return fetch(url, { method:'GET', cache:'no-store' })
+    .then(r => { if(!r.ok) throw new Error('Сервер ответил ошибкой ' + r.status + '.'); return r.json(); })
+    .catch(e => { if(e instanceof SyntaxError) throw new Error('Сервер вернул непонятный ответ. Проверьте адрес /exec.'); throw (e.message ? e : new Error('Нет связи с сервером.')); })
+    .then(d => {
+      if(!d.ok) throw new Error(d.error || 'Ошибка сервера.');
+      if(d.result === undefined) throw new Error('Старое развёртывание Apps Script. Обновите версию веб-приложения.');
+      return d.result;
+    });
+}
+
+/* ================= расписание ================= */
+function holidayMap(){
+  const m = {};
+  (S.settings.holidays||[]).forEach(h => { m[h.date] = h.note || 'Нет занятий'; });
+  return m;
+}
+function planFor(ds){
+  const st = S.settings;
+  if(st.yearStart && ds < st.yearStart) return 0;
+  if(st.yearEnd && ds > st.yearEnd) return 0;
+  if((st.holidays||[]).some(h => h.date === ds)) return 0;
+  return Number(st.schedule[parseD(ds).getDay()]) || 0;
+}
+const isClassDay = ds => planFor(ds) > 0;
+function classDays(from,to){ return rangeDays(from,to).filter(isClassDay); }
+function weekHours(){ return (S.settings.schedule||[]).reduce((a,b)=>a+Number(b||0),0); }
+
+const students = (all) => S.people
+  .filter(p => p.role==='student' && (all || p.active))
+  .sort((a,b) => a.name.localeCompare(b.name,'ru'));
+const staffList = () => S.people.filter(p => p.role!=='student').sort((a,b)=>a.name.localeCompare(b.name,'ru'));
+const uniq = arr => Array.from(new Set(arr.filter(Boolean))).sort((a,b) => a.localeCompare(b,'ru'));
+const teams = () => uniq(S.people.filter(p => p.role==='student').map(p => p.team));
+const cats  = () => uniq(S.people.filter(p => p.role==='student').map(p => p.category));
+/* список учеников с учётом выбранных фильтров по команде и категории */
+const visible = all => students(all)
+  .filter(p => (!S.fTeam || p.team === S.fTeam) && (!S.fCat || p.category === S.fCat));
+const hasFilter = () => !!(S.fTeam || S.fCat);
+
+function filterBar(){
+  if(!teams().length && !cats().length) return '';
+  const opt = (list, cur) => '<option value="">Все</option>' +
+    list.map(x => '<option value="' + esc(x) + '"' + (x===cur?' selected':'') + '>' + esc(x) + '</option>').join('');
+  return '<div class="row" style="margin-bottom:14px">' +
+    (teams().length ? '<label class="small muted nowrap">Команда ' +
+      '<select class="in" style="width:auto" data-act="f-team">' + opt(teams(), S.fTeam) + '</select></label>' : '') +
+    (cats().length ? '<label class="small muted nowrap">Категория ' +
+      '<select class="in" style="width:auto" data-act="f-cat">' + opt(cats(), S.fCat) + '</select></label>' : '') +
+    (hasFilter() ? '<button class="btn sm" data-act="f-clear">Сбросить</button>' : '') +
+    '<span class="muted small">Показано: ' + visible().length + ' из ' + students().length + '</span></div>';
+}
+const who = p => [p.cls, p.team, p.category].filter(Boolean).join(' · ');
+const personById = id => S.people.find(p => p.id === id);
+const isStaff = () => S.me && (S.me.role==='admin' || S.me.role==='assistant');
+const isAdmin = () => S.me && S.me.role==='admin';
+
+function reindex(){
+  S.marksIdx = {};
+  S.held = {};
+  S.marks.forEach(m => { S.marksIdx[m.d + '|' + m.u] = m; S.held[m.d] = true; });
+}
+/* Занятие считается проведённым, если в этот день есть хотя бы одна отметка. */
+const wasHeld = ds => !!S.held[ds];
+const markOf = (ds, uid) => S.marksIdx[ds + '|' + uid] || null;
+
+/* ================= статистика ================= */
+function statsFor(uid, from, to){
+  const p = personById(uid);
+  const since = (p && p.since) ? p.since : from;
+  const start = since > from ? since : from;
+  const days = start <= to ? classDays(start, to) : [];
+  const r = { days:days.length, held:0, marked:0, unmarked:0,
+              hoursPlanAll:0, hoursPlan:0, hoursFact:0, hoursMissed:0, hoursExcused:0,
+              p:0, l:0, e:0, a:0, missDates:[] };
+  days.forEach(ds => {
+    const plan = planFor(ds);
+    r.hoursPlanAll += plan;
+    if(!wasHeld(ds)) return;               // занятие ещё не проводилось
+    r.held++;
+    const m = markOf(ds, uid);
+    if(!m){ r.unmarked++; return; }        // занятие было, но ученика не отметили
+    r.marked++;
+    r.hoursPlan += plan;
+    r[m.s]++;
+    if(m.s === 'p' || m.s === 'l'){
+      const h = Math.min(plan, Number(m.h)||0);
+      r.hoursFact += h;
+      if(plan - h > 0.01) r.hoursMissed += plan - h;
+    } else if(m.s === 'e'){
+      r.hoursExcused += plan;
+      r.missDates.push({ d:ds, s:'e', h:plan });
+    } else {
+      r.hoursMissed += plan;
+      r.missDates.push({ d:ds, s:'a', h:plan });
+    }
+  });
+  r.percent = r.hoursPlan > 0 ? Math.round(r.hoursFact / r.hoursPlan * 100) : 0;
+  r.missDates.sort((a,b) => b.d.localeCompare(a.d));
+  return r;
+}
+
+/* ================= сообщения ================= */
+function say(text, kind, where){
+  const el = document.getElementById(where || 'banner');
+  if(!el) return;
+  el.innerHTML = text ? '<div class="msg ' + (kind||'ok') + '">' + esc(text) + '</div>' : '';
+  if(text && kind !== 'err') setTimeout(() => { if(el.textContent.indexOf(text) >= 0) el.innerHTML = ''; }, 4000);
+  if(text) window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+async function call(fn, args, okMsg){
+  if(S.busy) return { ok:false, v:null };
+  S.busy = true;
+  try {
+    const v = await api(fn, args);
+    if(okMsg) say(okMsg, 'ok');
+    return { ok:true, v };
+  } catch(e){
+    if(String(e.message) === 'AUTH'){ logout(true); return { ok:false, v:null }; }
+    say(e.message, 'err');
+    return { ok:false, v:null };
+  } finally { S.busy = false; }
+}
+
+/* ================= тема ================= */
+function setTheme(dark){
+  document.body.classList.toggle('dark', dark);
+  LS.set(K_THEME, dark ? 'dark' : 'light');
+  const meta = document.querySelector('meta[name=theme-color]');
+  if(meta) meta.setAttribute('content', dark ? '#08081A' : '#121233');
+  document.querySelectorAll('.gate .logo').forEach(img => {
+    img.src = dark ? 'assets/logo-full-inverse.png' : 'assets/logo-full.png';
+  });
+  const foot = document.querySelector('.foot img');
+  if(foot) foot.src = dark ? 'assets/logo-mark-inverse.png' : 'assets/logo-mark.png';
+}
+
+/* ================= вход и загрузка ================= */
+function show(id){
+  ['setup','gate','app'].forEach(x => document.getElementById(x).classList.toggle('hide', x !== id));
+}
+
+async function boot(){
+  setTheme(LS.get(K_THEME) === 'dark');
+  S.api = LS.get(K_API) || DEFAULT_API_URL;
+  if(!S.api){ show('setup'); return; }
+  S.token = LS.get(K_TOKEN) || '';
+  if(S.token){
+    const r = await call('state', [S.token]);
+    if(r.ok){ apply(r.v); return; }
+  }
+  await showGate();
+}
+
+async function showGate(){
+  show('gate');
+  const sel = document.getElementById('who');
+  sel.innerHTML = '<option value="">Загружаем список…</option>';
+  try {
+    const b = await api('boot', []);
+    document.getElementById('gateTitle').textContent = b.groupName || 'Посещаемость кружка';
+    if(b.needSetup){
+      say('В таблице ещё нет ни одного участника. Запустите функцию setup() в редакторе Apps Script.', 'warn', 'gateMsg');
+      sel.innerHTML = '<option value="">—</option>';
+      return;
+    }
+    const groups = { admin:[], assistant:[], student:[] };
+    b.roster.forEach(p => { (groups[p.role] || groups.student).push(p); });
+    let html = '<option value="">Выберите имя…</option>';
+    [['student','Ученики'],['assistant','Помощники'],['admin','Администраторы']].forEach(([k,label]) => {
+      if(!groups[k].length) return;
+      html += '<optgroup label="' + label + '">' +
+        groups[k].map(p => '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>').join('') +
+        '</optgroup>';
+    });
+    sel.innerHTML = html;
+  } catch(e){
+    sel.innerHTML = '<option value="">—</option>';
+    say(e.message, 'err', 'gateMsg');
+  }
+}
+
+async function doLogin(){
+  const id = document.getElementById('who').value;
+  const pin = document.getElementById('pin').value.trim();
+  if(!id){ say('Выберите себя в списке.', 'err', 'gateMsg'); return; }
+  if(!pin){ say('Введите код.', 'err', 'gateMsg'); return; }
+  const btn = document.getElementById('doLogin');
+  btn.disabled = true; btn.textContent = 'Входим…';
+  try {
+    const st = await api('login', [id, pin]);
+    S.token = st.token;
+    LS.set(K_TOKEN, st.token);
+    document.getElementById('pin').value = '';
+    say('', '', 'gateMsg');
+    apply(st);
+  } catch(e){
+    say(e.message, 'err', 'gateMsg');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Войти';
+  }
+}
+
+function logout(auto){
+  if(S.token && !auto) api('logout', [S.token]).catch(()=>{});
+  LS.del(K_TOKEN); LS.del(K_CACHE);
+  S.token=''; S.me=null; S.marks=[]; S.people=[]; S.awards=[]; S.topics=[];
+  showGate();
+  if(auto) say('Сессия истекла, войдите снова.', 'warn', 'gateMsg');
+}
+
+function apply(st){
+  document.getElementById('banner').innerHTML = '';
+  S.me = st.me;
+  S.settings = st.settings;
+  S.people = st.people || [];
+  S.marks = st.marks || [];
+  S.awards = st.awards || [];
+  S.topics = st.topics || [];
+  reindex();
+  LS.set(K_CACHE, { at: Date.now(), me: S.me });
+  if(!S.from){
+    const ys = S.settings.yearStart, ye = S.settings.yearEnd;
+    S.from = ys; S.to = (todayStr() < ye ? todayStr() : ye);
+    if(S.to < S.from) S.to = ye;
+  }
+  document.getElementById('meName').textContent = S.me.name;
+  document.getElementById('meRole').textContent = ROLES[S.me.role] || '';
+  show('app');
+  const tabs = tabList();
+  if(!tabs.some(t => t[0] === S.tab)) S.tab = tabs[0][0];
+  render();
+}
+
+async function refresh(){
+  const r = await call('state', [S.token]);
+  if(r.ok) apply(r.v);
+}
+
+/* ================= вкладки ================= */
+function tabList(){
+  if(isStaff()) return [
+    ['day','Журнал'], ['grid','Таблица'], ['report','Анализ года'],
+    ['people','Ученики'], ['extra','Олимпиады и темы'], ['plan','План года'],
+    ...(isAdmin() ? [['settings','Настройки']] : [])
+  ];
+  return [['my','Мои занятия'], ['myextra','Олимпиады и темы'], ['plan','План года']];
+}
+
+function render(){
+  document.getElementById('topName').textContent = S.settings.groupName || 'Кружок';
+  const tabs = tabList();
+  document.getElementById('tabs').innerHTML = tabs.map(([k,label]) =>
+    '<button class="tab' + (k === S.tab ? ' on' : '') + '" data-tab="' + k + '">' + label + '</button>').join('');
+  const v = document.getElementById('view');
+  const fn = {
+    day: viewDay, grid: viewGrid, report: viewReport, people: viewPeople,
+    extra: viewExtra, plan: viewPlan, settings: viewSettings, my: viewMy, myextra: viewMyExtra
+  }[S.tab];
+  v.innerHTML = fn ? fn() : '';
+  window.scrollTo({ top:0 });
+}
+
+/* ================= ЖУРНАЛ ДНЯ ================= */
+function viewDay(){
+  const ds = S.day, plan = planFor(ds), d = parseD(ds), hol = holidayMap()[ds];
+  const list = visible().filter(p => !p.since || p.since <= ds);
+  const later = visible().length - list.length;
+
+  let info;
+  if(hol) info = '<span class="chip gold">Нет занятий</span> ' + esc(hol);
+  else if(!plan) info = '<span class="chip">Выходной по расписанию</span>';
+  else info = 'По плану <b>' + nf(plan) + ' ч</b>';
+
+  const marked = list.filter(p => markOf(ds, p.id)).length;
+
+  let rows = list.map(p => {
+    const m = markOf(ds, p.id);
+    const cur = m ? m.s : '';
+    const seg = ['p','l','e','a'].map(s =>
+      '<button data-s="' + s + '" class="' + (cur===s?'on':'') + '" data-act="mark" data-id="' + p.id + '">' +
+      ST[s].name + '</button>').join('');
+    const showH = (cur==='p'||cur==='l') && plan > 0;
+    const hours = showH
+      ? '<input class="in hin" type="number" min="0" step="0.5" max="' + plan + '" value="' + nf(m.h) +
+        '" data-act="hours" data-id="' + p.id + '" title="Сколько часов был">'
+      : '';
+    return '<li><div class="pname">' + esc(p.name) +
+      '<i>' + esc(who(p)) + (m && m.n ? ' · ' + esc(m.n) : '') + '</i></div>' +
+      '<div class="seg">' + seg + '</div>' + hours +
+      (cur ? '<button class="btn sm" data-act="clear" data-id="' + p.id + '" title="Снять отметку">✕</button>' : '') +
+      '</li>';
+  }).join('');
+
+  if(!list.length) rows = '<li class="muted">Ученики ещё не добавлены. Откройте вкладку «Ученики».</li>';
+
+  return '<div class="head"><h2>' + WD_FULL[d.getDay()] + ', ' + human(ds) + '</h2>' +
+    '<span class="muted small">Отмечено ' + marked + ' из ' + list.length + '</span></div>' +
+    filterBar() +
+    '<div class="daybar">' +
+      '<button class="btn sm" data-act="day-shift" data-n="-1">‹ Назад</button>' +
+      '<input class="in" style="width:auto" type="date" value="' + ds + '" data-act="day-set">' +
+      '<button class="btn sm" data-act="day-shift" data-n="1">Вперёд ›</button>' +
+      '<button class="btn sm" data-act="day-today">Сегодня</button>' +
+    '</div>' +
+    '<div class="sect"><div class="row" style="justify-content:space-between">' +
+      '<div>' + info + '</div>' +
+      '<div class="row">' +
+        (plan ? '<button class="btn sm" data-act="all-present">Все были</button>' : '') +
+        '<button class="btn sm" data-act="all-clear">Очистить день</button>' +
+      '</div></div>' +
+      (later ? '<p class="small muted" style="margin:10px 0 0">' + later + ' ученик(ов) зачислены позже этой даты и здесь не показаны.</p>' : '') +
+      '<ul class="plist" style="margin-top:12px">' + rows + '</ul>' +
+    '</div>' +
+    '<div class="legend">' + ['p','l','e','a'].map(s =>
+      '<span><i class="dot" style="background:' + stColor(s) + '"></i>' + ST[s].full + '</span>').join('') + '</div>';
+}
+
+function stColor(s){
+  return { p:'var(--blue)', l:'var(--yellow)', e:'var(--gold)', a:'var(--coral)' }[s] || 'var(--line2)';
+}
+
+/* ================= ТАБЛИЦА ПО МЕСЯЦУ ================= */
+function viewGrid(){
+  const ym = S.month;
+  const y = Number(ym.slice(0,4)), mo = Number(ym.slice(5,7)) - 1;
+  const first = fmt(new Date(y, mo, 1)), last = fmt(new Date(y, mo+1, 0));
+  const days = classDays(first, last);
+  const list = visible();
+
+  const head = '<tr><th class="stick">Ученик</th>' +
+    days.map(ds => '<th title="' + human(ds) + '">' + parseD(ds).getDate() +
+      '<br><span class="muted">' + WD_SHORT[parseD(ds).getDay()] + '</span></th>').join('') +
+    '<th>Проп.</th><th>%</th></tr>';
+
+  const body = list.map(p => {
+    const st = statsFor(p.id, first, last);
+    const cells = days.map(ds => {
+      if(p.since && p.since > ds) return '<td><span class="cell" title="Ещё не зачислен">·</span></td>';
+      const m = markOf(ds, p.id);
+      const cls = m ? m.s : '';
+      const letter = m ? ST[m.s].letter : '';
+      const tag = isStaff() ? 'button' : 'span';
+      return '<td><' + tag + ' class="cell ' + cls + '"' +
+        (isStaff() ? ' data-act="cycle" data-id="' + p.id + '" data-d="' + ds + '"' : '') +
+        ' title="' + human(ds) + (m ? ' — ' + ST[m.s].full : '') + '">' + letter + '</' + tag + '></td>';
+    }).join('');
+    return '<tr><td class="stick">' + esc(p.name) + '</td>' + cells +
+      '<td class="num">' + (st.a + st.e) + '</td><td class="num">' + st.percent + '%</td></tr>';
+  }).join('');
+
+  return '<div class="head"><h2>' + MONTHS[mo] + ' ' + y + '</h2>' +
+    '<div class="row"><button class="btn sm" data-act="mon-shift" data-n="-1">‹</button>' +
+    '<input class="in" style="width:auto" type="month" value="' + ym + '" data-act="mon-set">' +
+    '<button class="btn sm" data-act="mon-shift" data-n="1">›</button></div></div>' +
+    filterBar() +
+    (days.length
+      ? '<div class="sect"><div class="scroll"><table class="grid"><thead>' + head + '</thead><tbody>' +
+        (body || '<tr><td class="muted">Нет учеников</td></tr>') + '</tbody></table></div>' +
+        (isStaff() ? '<p class="small muted" style="margin:10px 0 0">Нажмите на клетку, чтобы переключить отметку: Был → Опоздал → Уваж. → Пропуск → пусто.</p>' : '') +
+        '</div>'
+      : '<div class="sect muted">В этом месяце занятий по расписанию нет.</div>') +
+    '<div class="legend">' + ['p','l','e','a'].map(s =>
+      '<span><i class="dot" style="background:' + stColor(s) + '"></i>' + ST[s].letter + ' — ' + ST[s].full + '</span>').join('') + '</div>';
+}
+
+/* ================= АНАЛИЗ ЗА ГОД ================= */
+function reportRows(){
+  return visible(true).map(p => {
+    const st = statsFor(p.id, S.from, S.to);
+    return { p, st };
+  }).filter(r => r.p.active || r.st.days > 0);
+}
+
+function sortRows(rows){
+  const k = S.sort;
+  const by = {
+    name: (a,b) => a.p.name.localeCompare(b.p.name,'ru'),
+    miss: (a,b) => (b.st.hoursMissed - a.st.hoursMissed) || (b.st.a - a.st.a),
+    excused: (a,b) => b.st.hoursExcused - a.st.hoursExcused,
+    late: (a,b) => b.st.l - a.st.l,
+    pct:  (a,b) => a.st.percent - b.st.percent,
+    fact: (a,b) => b.st.hoursFact - a.st.hoursFact
+  }[k] || ((a,b) => a.p.name.localeCompare(b.p.name,'ru'));
+  return rows.slice().sort(by);
+}
+
+function viewReport(){
+  const rows = sortRows(reportRows());
+  const days = classDays(S.from, S.to);
+  const held = days.filter(wasHeld);
+  const totalPlan = days.reduce((a,ds) => a + planFor(ds), 0);
+  const heldPlan = held.reduce((a,ds) => a + planFor(ds), 0);
+  const sum = rows.reduce((a,r) => ({
+    fact: a.fact + r.st.hoursFact, miss: a.miss + r.st.hoursMissed,
+    exc: a.exc + r.st.hoursExcused, abs: a.abs + r.st.a, late: a.late + r.st.l,
+    unmarked: a.unmarked + r.st.unmarked, plan: a.plan + r.st.hoursPlan
+  }), { fact:0, miss:0, exc:0, abs:0, late:0, unmarked:0, plan:0 });
+  const avg = sum.plan > 0 ? Math.round(sum.fact / sum.plan * 100) : 0;
+
+  const th = (k,label,cls) => '<th class="sortable ' + (cls||'') + '" data-act="sort" data-k="' + k + '">' +
+    label + (S.sort === k ? ' ▾' : '') + '</th>';
+
+  const body = rows.map((r,i) => {
+    const st = r.st;
+    return '<tr>' +
+      '<td class="num muted">' + (i+1) + '</td>' +
+      '<td><a href="#" data-act="open-student" data-id="' + r.p.id + '">' + esc(r.p.name) + '</a>' +
+        (r.p.active ? '' : ' <span class="chip">в архиве</span>') +
+        (who(r.p) ? '<br><span class="muted small">' + esc(who(r.p)) + '</span>' : '') + '</td>' +
+      '<td class="num">' + st.held + '</td>' +
+      '<td class="num">' + st.p + '</td>' +
+      '<td class="num">' + st.l + '</td>' +
+      '<td class="num">' + st.e + '</td>' +
+      '<td class="num"><b>' + st.a + '</b></td>' +
+      '<td class="num muted">' + st.unmarked + '</td>' +
+      '<td class="num">' + nf(st.hoursPlan) + '</td>' +
+      '<td class="num">' + nf(st.hoursFact) + '</td>' +
+      '<td class="num" style="color:var(--coral)">' + nf(st.hoursMissed) + '</td>' +
+      '<td class="num">' + nf(st.hoursExcused) + '</td>' +
+      '<td class="pctcell"><div class="row nowrapflex"><span class="nowrap">' + st.percent + '%</span>' +
+        '<div class="bar grow"><i style="width:' + Math.min(100, st.percent) + '%;background:' +
+        (st.percent >= 90 ? 'var(--blue)' : st.percent >= 75 ? 'var(--gold)' : 'var(--coral)') + '"></i></div></div></td>' +
+      '</tr>';
+  }).join('');
+
+  return '<div class="head"><h2>Итоги посещаемости</h2>' +
+    '<button class="btn sm" data-act="csv-report">Выгрузить CSV</button></div>' +
+    filterBar() +
+
+    '<div class="sect"><div class="row">' +
+      '<div class="field" style="margin:0"><label>С</label><input class="in" type="date" value="' + S.from + '" data-act="from"></div>' +
+      '<div class="field" style="margin:0"><label>По</label><input class="in" type="date" value="' + S.to + '" data-act="to"></div>' +
+      '<div class="row" style="align-self:flex-end">' +
+        '<button class="btn sm" data-act="per-year">Весь учебный год</button>' +
+        '<button class="btn sm" data-act="per-month">Текущий месяц</button>' +
+      '</div></div>' +
+      '<p class="small muted" style="margin:10px 0 0">По расписанию в периоде ' + days.length + ' занятий (' + nf(totalPlan) +
+      ' ч), из них проведено и отмечено ' + held.length + ' (' + nf(heldPlan) + ' ч). Норма недели: ' + nf(weekHours()) + ' ч. ' +
+      'Проценты считаются только по проведённым занятиям.</p></div>' +
+
+    '<div class="cards">' +
+      tile(rows.length, '', 'Учеников') +
+      tile(held.length, '', 'Занятий проведено') +
+      tile(avg + '%', '', 'Средняя посещаемость') +
+      tile(nf(sum.miss), ' ч', 'Пропущено без причины') +
+      tile(nf(sum.exc), ' ч', 'Пропущено по уважительной') +
+      tile(sum.late, '', 'Опозданий') +
+      tile(sum.unmarked, '', 'Клеток не отмечено') +
+    '</div>' +
+
+    '<div class="sect"><div class="scroll"><table><thead><tr>' +
+      '<th></th>' + th('name','Ученик') + '<th class="num">Проведено</th>' +
+      '<th class="num">Был</th>' + th('late','Опозд.','num') + th('excused','Уваж.','num') +
+      th('miss','Пропусков','num') + '<th class="num">Не отм.</th>' +
+      '<th class="num">Часы план</th>' + th('fact','Часы посещено','num') +
+      th('miss','Пропущ. ч','num') + '<th class="num">Уваж. ч</th>' + th('pct','Посещаемость') +
+      '</tr></thead><tbody>' + (body || '<tr><td colspan="13" class="muted">Нет данных</td></tr>') + '</tbody></table></div></div>';
+}
+
+function tile(value, unit, label){
+  return '<div class="tile"><b>' + value + '<i>' + (unit||'') + '</i></b><span>' + label + '</span></div>';
+}
+
+/* ================= выгрузка CSV ================= */
+function download(name, text){
+  const blob = new Blob(['﻿' + text], { type:'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function csv(rows){
+  return rows.map(r => r.map(c => {
+    const s = String(c == null ? '' : c);
+    return /[";\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+  }).join(';')).join('\n');
+}
+function csvReport(){
+  const rows = [['№','Ученик','Класс','Команда','Категория','Зачислен','Занятий по расписанию','Проведено','Был','Опозданий','Уважительных',
+                 'Пропусков','Не отмечено','Часы по плану (расписание)','Часы по проведённым','Часы посещено',
+                 'Часы пропущено','Часы по уважительной','Посещаемость %']];
+  sortRows(reportRows()).forEach((r,i) => {
+    const s = r.st;
+    rows.push([i+1, r.p.name, r.p.cls, r.p.team, r.p.category, r.p.since, s.days, s.held, s.p, s.l, s.e, s.a, s.unmarked,
+               nf(s.hoursPlanAll), nf(s.hoursPlan), nf(s.hoursFact), nf(s.hoursMissed),
+               nf(s.hoursExcused), s.percent]);
+  });
+  download('посещаемость_' + S.from + '_' + S.to + '.csv', csv(rows));
+}
+function csvAwards(){
+  const rows = [['Ученик','Дата','Олимпиада','Предмет','Уровень','Результат','Примечание']];
+  S.awards.slice().sort((a,b) => (b.date||'').localeCompare(a.date||'')).forEach(a => {
+    const p = personById(a.u);
+    rows.push([p ? p.name : a.u, a.date, a.title, a.subject, LEVELS[a.level]||'', RESULTS[a.result]||'', a.note]);
+  });
+  download('олимпиады.csv', csv(rows));
+}
+function csvTopics(){
+  const rows = [['Ученик','Предмет','Тема','Статус','Срок','Примечание']];
+  S.topics.forEach(t => {
+    const p = personById(t.u);
+    rows.push([p ? p.name : t.u, t.subject, t.title, TSTAT[t.status]||'', t.due, t.note]);
+  });
+  download('темы.csv', csv(rows));
+}
+
+/* ================= модальные окна ================= */
+function modal(html){
+  document.getElementById('modal').innerHTML =
+    '<div class="modal" data-act="modal-bg"><div class="box">' + html +
+    '<div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn" data-act="modal-close">Закрыть</button></div></div></div>';
+}
+function closeModal(){ document.getElementById('modal').innerHTML = ''; }
+function showPins(list, title){
+  modal('<h3>' + (title || 'Коды для входа') + '</h3>' +
+    '<p class="small muted">Запишите или передайте коды — увидеть их снова нельзя, только сбросить.</p>' +
+    '<ul class="pinlist">' + list.map(x =>
+      '<li><span>' + esc(x.name) + '</span><b>' + esc(x.pin) + '</b></li>').join('') + '</ul>');
+}
+
+/* ================= УЧЕНИКИ ================= */
+function viewPeople(){
+  if(S.openStudent) return viewStudentCard(S.openStudent);
+  const list = visible(true);
+  const body = list.map(p => {
+    const st = statsFor(p.id, S.from, S.to);
+    return '<tr>' +
+      '<td><a href="#" data-act="open-student" data-id="' + p.id + '">' + esc(p.name) + '</a>' +
+        (p.active ? '' : ' <span class="chip">архив</span>') + '</td>' +
+      '<td>' + esc(p.cls) + '</td>' +
+      '<td>' + (p.team ? '<span class="chip">' + esc(p.team) + '</span>' : '') + '</td>' +
+      '<td>' + esc(p.category) + '</td>' +
+      '<td class="muted small">' + (p.teamRole ? TEAM_ROLES[p.teamRole] || p.teamRole : '') + '</td>' +
+      '<td class="num">' + st.percent + '%</td>' +
+      '<td class="num">' + st.a + '</td>' +
+      '<td class="num">' + S.awards.filter(a => a.u === p.id).length + '</td>' +
+      '<td class="num">' + S.topics.filter(t => t.u === p.id && t.status !== 'done').length + '</td>' +
+      '<td><div class="row" style="gap:6px">' +
+        '<button class="btn sm" data-act="reset-pin" data-id="' + p.id + '">Новый код</button>' +
+        (isAdmin() ? '<button class="btn sm" data-act="toggle-active" data-id="' + p.id + '">' +
+          (p.active ? 'В архив' : 'Вернуть') + '</button>' : '') +
+      '</div></td></tr>';
+  }).join('');
+
+  const dl = '<datalist id="teamList">' + teams().map(t => '<option value="' + esc(t) + '">').join('') + '</datalist>' +
+             '<datalist id="catList">' + cats().map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>';
+
+  return '<div class="head"><h2>Ученики <span class="muted small">(' + students().length + ' активных)</span></h2></div>' +
+    filterBar() + dl +
+    '<div class="sect"><h3>Добавить ученика</h3>' +
+      '<div class="row">' +
+        '<input class="in grow" id="newName" placeholder="Фамилия и имя">' +
+        '<input class="in" style="width:90px" id="newCls" placeholder="Класс">' +
+        '<input class="in" style="width:130px" id="newTeam" list="teamList" placeholder="Команда">' +
+        '<input class="in" style="width:110px" id="newCat" list="catList" placeholder="FLL / FTC">' +
+        '<input class="in" style="width:auto" type="date" id="newSince" value="' + todayStr() + '" title="С какой даты числится">' +
+        '<button class="btn pri" data-act="add-student">Добавить</button>' +
+      '</div>' +
+      '<details style="margin-top:14px"><summary class="muted small" style="cursor:pointer">Добавить сразу списком</summary>' +
+        '<p class="small muted" style="margin:10px 0 6px">По одному имени в строке.</p>' +
+        '<textarea class="in" id="bulkNames" placeholder="Иванов Иван&#10;Петрова Мария"></textarea>' +
+        '<div class="row" style="margin-top:10px">' +
+          '<input class="in" style="width:130px" id="bulkTeam" list="teamList" placeholder="Команда">' +
+          '<input class="in" style="width:110px" id="bulkCat" list="catList" placeholder="FLL / FTC">' +
+          '<input class="in" style="width:auto" type="date" id="bulkSince" value="' + todayStr() + '">' +
+          '<button class="btn" data-act="add-bulk">Добавить всех</button></div>' +
+      '</details></div>' +
+    '<div class="sect"><div class="scroll"><table><thead><tr>' +
+      '<th>Ученик</th><th>Класс</th><th>Команда</th><th>Кат.</th><th>Роль</th>' +
+      '<th class="num">Посещ.</th><th class="num">Проп.</th>' +
+      '<th class="num">Олимп.</th><th class="num">Тем</th><th></th></tr></thead><tbody>' +
+      (body || '<tr><td colspan="11" class="muted">Список пуст</td></tr>') + '</tbody></table></div>' +
+      '<p class="small muted" style="margin:10px 0 0">Посещаемость и пропуски — за период ' + human(S.from) + ' — ' + human(S.to) + '.</p></div>';
+}
+
+function viewStudentCard(id){
+  const p = personById(id);
+  if(!p){ S.openStudent = ''; return viewPeople(); }
+  const st = statsFor(id, S.from, S.to);
+  const aw = S.awards.filter(a => a.u === id).sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const tp = S.topics.filter(t => t.u === id);
+
+  return '<div class="head"><h2>' + esc(p.name) +
+      (who(p) ? ' <span class="muted small">' + esc(who(p)) +
+        (p.teamRole ? ' · ' + (TEAM_ROLES[p.teamRole] || p.teamRole) : '') + '</span>' : '') + '</h2>' +
+      '<button class="btn sm" data-act="back-people">← К списку</button></div>' +
+
+    '<div class="cards">' +
+      tile(st.percent + '%', '', 'Посещаемость') +
+      tile(nf(st.hoursFact), ' ч', 'Посещено из ' + nf(st.hoursPlan) + ' ч') +
+      tile(nf(st.hoursMissed), ' ч', 'Пропущено') +
+      tile(st.a, '', 'Пропусков без причины') +
+      tile(st.l, '', 'Опозданий') +
+      tile(aw.length, '', 'Олимпиад') +
+    '</div>' +
+
+    (isStaff() ? '<div class="sect"><h3>Данные ученика</h3>' +
+      '<datalist id="teamList">' + teams().map(t => '<option value="' + esc(t) + '">').join('') + '</datalist>' +
+      '<datalist id="catList">' + cats().map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>' +
+      '<div class="row">' +
+      '<div class="field grow" style="margin:0"><label>Имя</label><input class="in" id="edName" value="' + esc(p.name) + '"></div>' +
+      '<div class="field" style="margin:0;width:90px"><label>Класс</label><input class="in" id="edCls" value="' + esc(p.cls) + '"></div>' +
+      '<div class="field" style="margin:0;width:140px"><label>Команда</label><input class="in" id="edTeam" list="teamList" value="' + esc(p.team) + '"></div>' +
+      '<div class="field" style="margin:0;width:110px"><label>Категория</label><input class="in" id="edCat" list="catList" value="' + esc(p.category) + '"></div>' +
+      '<div class="field" style="margin:0;width:170px"><label>Роль в команде</label><select class="in" id="edRole">' +
+        '<option value="">—</option>' + Object.keys(TEAM_ROLES).map(k =>
+          '<option value="' + k + '"' + (p.teamRole===k?' selected':'') + '>' + TEAM_ROLES[k] + '</option>').join('') + '</select></div>' +
+      '<div class="field" style="margin:0"><label>Зачислен с</label><input class="in" id="edSince" type="date" value="' + (p.since||'') + '"></div>' +
+      '<div class="row" style="align-self:flex-end">' +
+        '<button class="btn pri" data-act="save-person" data-id="' + id + '">Сохранить</button>' +
+        '<button class="btn sm" data-act="reset-pin" data-id="' + id + '">Новый код</button>' +
+        (isAdmin() ? '<button class="btn sm danger" data-act="delete-person" data-id="' + id + '">Удалить</button>' : '') +
+      '</div></div></div>' : '') +
+
+    '<div class="sect"><div class="head"><h3>Олимпиады и достижения</h3>' +
+      (isStaff() ? '<button class="btn sm" data-act="award-form" data-u="' + id + '">Добавить</button>' : '') + '</div>' +
+      awardsTable(aw, false) + '</div>' +
+
+    '<div class="sect"><div class="head"><h3>Темы для изучения</h3>' +
+      (isStaff() ? '<button class="btn sm" data-act="topic-form" data-u="' + id + '">Добавить</button>' : '') + '</div>' +
+      topicsTable(tp, false) + '</div>' +
+
+    '<div class="sect"><h3>Пропуски за период</h3>' +
+      (st.missDates.length
+        ? '<div class="scroll"><table><tbody>' + st.missDates.map(m =>
+            '<tr><td>' + human(m.d) + '</td><td>' + WD_SHORT[parseD(m.d).getDay()] + '</td>' +
+            '<td><span class="chip ' + (m.s==='a'?'coral':'gold') + '">' + ST[m.s].full + '</span></td>' +
+            '<td class="num">' + nf(m.h) + ' ч</td></tr>').join('') + '</tbody></table></div>'
+        : '<p class="muted">Пропусков нет.</p>') + '</div>';
+}
+
+/* ================= ОЛИМПИАДЫ И ТЕМЫ (для педагогов) ================= */
+function awardsTable(list, withName){
+  if(!list.length) return '<p class="muted">Пока пусто.</p>';
+  return '<div class="scroll"><table><thead><tr>' +
+    (withName ? '<th>Ученик</th>' : '') +
+    '<th>Дата</th><th>Олимпиада</th><th>Предмет</th><th>Уровень</th><th>Результат</th><th>Примечание</th>' +
+    (isStaff() ? '<th></th>' : '') + '</tr></thead><tbody>' +
+    list.map(a => {
+      const p = personById(a.u);
+      return '<tr>' +
+        (withName ? '<td>' + esc(p ? p.name : '—') + '</td>' : '') +
+        '<td class="muted small">' + (a.date || '') + '</td>' +
+        '<td>' + esc(a.title) + '</td>' +
+        '<td>' + esc(a.subject) + '</td>' +
+        '<td>' + (LEVELS[a.level] || '') + '</td>' +
+        '<td>' + (a.result ? '<span class="chip ' + (['gold','silver','bronze'].indexOf(a.result)>=0 ? 'gold' : '') + '">' +
+          RESULTS[a.result] + '</span>' : '') + '</td>' +
+        '<td class="muted small">' + esc(a.note) + '</td>' +
+        (isStaff() ? '<td><div class="row" style="gap:6px">' +
+          '<button class="btn sm" data-act="award-form" data-id="' + a.id + '">Изм.</button>' +
+          '<button class="btn sm danger" data-act="award-del" data-id="' + a.id + '">✕</button></div></td>' : '') +
+        '</tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+function topicsTable(list, withName){
+  if(!list.length) return '<p class="muted">Пока пусто.</p>';
+  const order = { todo:0, doing:1, done:2 };
+  return '<div class="scroll"><table><thead><tr>' +
+    (withName ? '<th>Ученик</th>' : '') +
+    '<th>Тема</th><th>Предмет</th><th>Статус</th><th>Срок</th><th>Примечание</th><th></th></tr></thead><tbody>' +
+    list.slice().sort((a,b) => (order[a.status]-order[b.status]) || (a.due||'').localeCompare(b.due||''))
+      .map(t => {
+        const p = personById(t.u);
+        return '<tr>' +
+          (withName ? '<td>' + esc(p ? p.name : '—') + '</td>' : '') +
+          '<td>' + esc(t.title) + '</td>' +
+          '<td>' + esc(t.subject) + '</td>' +
+          '<td><span class="chip ' + (t.status==='done'?'done':t.status==='doing'?'blue':'') + '">' + TSTAT[t.status] + '</span></td>' +
+          '<td class="muted small">' + (t.due || '') + '</td>' +
+          '<td class="muted small">' + esc(t.note) + '</td>' +
+          '<td><div class="row" style="gap:6px">' +
+            '<button class="btn sm" data-act="topic-next" data-id="' + t.id + '">' +
+              (t.status==='done' ? 'Вернуть' : t.status==='doing' ? 'Освоено' : 'Начал') + '</button>' +
+            (isStaff() ? '<button class="btn sm" data-act="topic-form" data-id="' + t.id + '">Изм.</button>' +
+              '<button class="btn sm danger" data-act="topic-del" data-id="' + t.id + '">✕</button>' : '') +
+          '</div></td></tr>';
+      }).join('') + '</tbody></table></div>';
+}
+
+function awardsMatrix(){
+  /* порядок колонок — как соревнования идут в данных (хронология сезона) */
+  const titles = [];
+  S.awards.forEach(a => { if(a.title && titles.indexOf(a.title) < 0) titles.push(a.title); });
+  if(!titles.length) return '';
+
+  const rows = visible(true).map(p => {
+    const own = S.awards.filter(a => a.u === p.id);
+    if(!own.length) return '';
+    const cells = titles.map(t => {
+      const a = own.find(x => x.title === t);
+      if(!a) return '<td></td>';
+      return '<td><span class="mx ' + a.result + '" title="' + esc(t + ' — ' + (RESULTS[a.result]||'') +
+        (a.note ? ': ' + a.note : '')) + '">' + (RES_SHORT[a.result] || '•') + '</span></td>';
+    }).join('');
+    const prizes = own.filter(a => ['gold','silver','bronze'].indexOf(a.result) >= 0).length;
+    return '<tr><td class="stick"><a href="#" data-act="open-student" data-id="' + p.id + '">' + esc(p.name) + '</a>' +
+      (p.team ? '<br><span class="muted small">' + esc(p.team) + '</span>' : '') + '</td>' +
+      cells + '<td class="num"><b>' + prizes + '</b></td></tr>';
+  }).filter(Boolean).join('');
+
+  if(!rows) return '';
+  return '<div class="sect"><h3>Кто где выступал</h3><div class="scroll"><table class="grid">' +
+    '<thead><tr><th class="stick">Ученик</th>' +
+    titles.map(t => '<th title="' + esc(t) + '"><div style="writing-mode:vertical-rl;transform:rotate(180deg);' +
+      'max-height:150px;overflow:hidden;font-weight:600;padding:4px 0">' + esc(t) + '</div></th>').join('') +
+    '<th>Приз.</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="legend">' +
+      '<span><i class="dot" style="background:#C9B291"></i>1 — первое место</span>' +
+      '<span><i class="dot" style="background:#D9D9E3"></i>2 — второе</span>' +
+      '<span><i class="dot" style="background:#E8C4A0"></i>3 — третье</span>' +
+      '<span><i class="dot" style="background:rgba(100,144,232,.5)"></i>★ — награда или грамота</span>' +
+      '<span><i class="dot" style="border:1px solid var(--line2)"></i>· — участие</span>' +
+    '</div><p class="small muted" style="margin:8px 0 0">Наведите на клетку — увидите, что именно получено.</p></div>';
+}
+
+const ROW_CAP = 60;
+const limitRows = list => list.slice(0, ROW_CAP);
+function moreNote(shown, total){
+  if(shown <= ROW_CAP) return '';
+  return '<p class="small muted" style="margin:10px 0 0">Показаны первые ' + ROW_CAP + ' из ' + shown +
+    '. Уточните поиск или фильтр, чтобы увидеть остальные' + (total !== shown ? ' (всего записей: ' + total + ')' : '') + '.</p>';
+}
+
+function viewExtra(){
+  const vis = {};
+  visible(true).forEach(p => { vis[p.id] = p; });
+  const q = S.q.trim().toLowerCase();
+  const match = (p, text) => !q ||
+    (p && p.name.toLowerCase().indexOf(q) >= 0) || String(text).toLowerCase().indexOf(q) >= 0;
+
+  const aw = S.awards.slice().sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const awShown = aw.filter(a => vis[a.u] && match(vis[a.u], a.title + ' ' + a.subject + ' ' + a.note));
+  const tpShown = S.topics.filter(t => vis[t.u] && match(vis[t.u], t.title + ' ' + t.subject));
+  const byStudent = {};
+  S.awards.forEach(a => { byStudent[a.u] = (byStudent[a.u]||0) + 1; });
+  const top = students().map(p => ({ p, n: byStudent[p.id]||0 })).filter(x => x.n).sort((a,b) => b.n-a.n);
+
+  return '<div class="head"><h2>Олимпиады и темы</h2>' +
+      '<div class="row"><button class="btn sm" data-act="csv-awards">CSV олимпиад</button>' +
+      '<button class="btn sm" data-act="csv-topics">CSV тем</button></div></div>' +
+
+    '<div class="cards">' +
+      tile(S.awards.length, '', 'Записей об олимпиадах') +
+      tile(S.awards.filter(a => ['gold','silver','bronze'].indexOf(a.result)>=0).length, '', 'Призовых мест') +
+      tile(top.length, '', 'Участников') +
+      tile(S.topics.filter(t => t.status!=='done').length, '', 'Тем в работе') +
+    '</div>' +
+
+    filterBar() +
+    awardsMatrix() +
+    competitionsBlock() +
+
+    '<div class="sect"><div class="head"><h3>Все записи об олимпиадах</h3>' +
+      (isStaff() ? '<button class="btn sm pri" data-act="award-form">Добавить запись</button>' : '') + '</div>' +
+      '<details' + (S.q ? ' open' : '') + '><summary class="muted small" style="cursor:pointer;margin-bottom:12px">' +
+        'Развернуть список (' + awShown.length + ')</summary>' +
+        '<div class="row" style="margin-bottom:12px">' +
+          '<input class="in grow" placeholder="Поиск по ученику или соревнованию" value="' + esc(S.q) + '" data-act="q">' +
+        '</div>' +
+        awardsTable(limitRows(awShown), true) +
+        moreNote(awShown.length, aw.length) +
+      '</details></div>' +
+
+    '<div class="sect"><div class="head"><h3>Темы для изучения</h3>' +
+      (isStaff() ? '<button class="btn sm pri" data-act="topic-form">Добавить тему</button>' : '') + '</div>' +
+      topicsTable(limitRows(tpShown), true) +
+      moreNote(tpShown.length, S.topics.length) + '</div>';
+}
+
+function competitionsBlock(){
+  const list = S.settings.competitions || [];
+  const rows = list.map((c,i) =>
+    '<tr><td>' + esc(c.title) + '</td><td class="muted">' + esc(c.when) + '</td>' +
+    '<td class="muted small">' + esc(c.term) + '</td>' +
+    '<td>' + (c.status ? '<span class="chip blue">' + esc(c.status) + '</span>' : '') + '</td>' +
+    (isAdmin() ? '<td><button class="btn sm danger" data-act="comp-del" data-i="' + i + '">✕</button></td>' : '') +
+    '</tr>').join('');
+  return '<div class="sect"><h3>Календарь соревнований</h3>' +
+    (rows ? '<div class="scroll"><table><thead><tr><th>Соревнование</th><th>Когда</th><th>Четверть</th><th>Статус</th>' +
+            (isAdmin() ? '<th></th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+          : '<p class="muted">Пока пусто.</p>') +
+    (isAdmin() ? '<div class="row" style="margin-top:12px">' +
+      '<input class="in grow" id="compTitle" placeholder="Название соревнования">' +
+      '<input class="in" style="width:150px" id="compWhen" placeholder="Когда">' +
+      '<input class="in" style="width:110px" id="compTerm" placeholder="Четверть">' +
+      '<button class="btn" data-act="comp-add">Добавить</button></div>' : '') + '</div>';
+}
+
+function compDatalist(){
+  const titles = uniq((S.settings.competitions||[]).map(c => c.title).concat(S.awards.map(a => a.title)));
+  return '<datalist id="compList">' + titles.map(t => '<option value="' + esc(t) + '">').join('') + '</datalist>';
+}
+
+/* ================= ГОДОВОЙ ПЛАН ================= */
+function viewPlan(){
+  const plan = S.settings.plan || [];
+  const roles = uniq(plan.map(x => x.role));
+  const mine = S.me.role === 'student' ? personById(S.me.id) : null;
+  const shown = plan.filter(x => !S.fRole || x.role === S.fRole);
+
+  const chips = '<div class="row" style="margin-bottom:14px">' +
+    '<button class="btn sm' + (S.fRole ? '' : ' pri') + '" data-act="plan-role" data-r="">Все</button>' +
+    roles.map(r => '<button class="btn sm' + (S.fRole === r ? ' pri' : '') + '" data-act="plan-role" data-r="' +
+      esc(r) + '">' + esc(r) + '</button>').join('') + '</div>';
+
+  let month = '';
+  const rows = shown.map(x => {
+    const head = x.month !== month ? (month = x.month, true) : false;
+    return (head ? '<tr><td colspan="5" style="background:var(--sunk);font-weight:600">' + esc(x.month) + '</td></tr>' : '') +
+      '<tr><td class="muted small nowrap">' + esc(x.week) + ' нед.</td>' +
+      '<td class="nowrap"><span class="chip">' + esc(x.role) + '</span></td>' +
+      '<td style="white-space:normal">' + esc(x.task) + '</td>' +
+      (isStaff() ? '<td><button class="btn sm" data-act="plan-assign" data-n="' + esc(x.n) + '" data-r="' +
+        esc(x.role) + '" data-t="' + esc(x.task) + '">Назначить</button></td>' : '') + '</tr>';
+  }).join('');
+
+  return '<div class="head"><h2>План на учебный год</h2>' +
+      (mine && mine.teamRole ? '<span class="muted small">Ваша роль: ' +
+        (TEAM_ROLES[mine.teamRole] || mine.teamRole) + '</span>' : '') + '</div>' +
+    (plan.length
+      ? chips + '<div class="sect"><div class="scroll"><table><tbody>' + rows + '</tbody></table></div>' +
+        (isStaff() ? '<p class="small muted" style="margin:10px 0 0">«Назначить» превращает пункт плана в тему для ученика, команды или всех сразу.</p>' : '') + '</div>'
+      : '<div class="sect muted">План пока не загружен. Его можно перенести из таблицы кружка скриптом import-club-data.gs.</div>');
+}
+
+function studentOptions(sel){
+  return students().map(p => '<option value="' + p.id + '"' + (p.id===sel?' selected':'') + '>' + esc(p.name) + '</option>').join('');
+}
+
+function awardForm(id, uid){
+  const a = id ? S.awards.find(x => x.id === id) : null;
+  const u = a ? a.u : (uid || (students()[0] || {}).id || '');
+  modal('<h3>' + (a ? 'Изменить запись' : 'Олимпиада или достижение') + '</h3>' + compDatalist() +
+    '<div class="field"><label>Ученик</label><select class="in" id="awU">' + studentOptions(u) + '</select></div>' +
+    '<div class="row">' +
+      '<div class="field grow"><label>Название олимпиады / конкурса</label><input class="in" id="awTitle" list="compList" value="' + esc(a?a.title:'') + '"></div>' +
+      '<div class="field" style="min-width:150px"><label>Дата</label><input class="in" type="date" id="awDate" value="' + (a?a.date:todayStr()) + '"></div>' +
+    '</div>' +
+    '<div class="row">' +
+      '<div class="field grow"><label>Предмет</label><input class="in" id="awSubj" value="' + esc(a?a.subject:'') + '"></div>' +
+      '<div class="field grow"><label>Уровень</label><select class="in" id="awLevel">' +
+        '<option value="">—</option>' + Object.keys(LEVELS).map(k =>
+          '<option value="' + k + '"' + (a&&a.level===k?' selected':'') + '>' + LEVELS[k] + '</option>').join('') + '</select></div>' +
+      '<div class="field grow"><label>Результат</label><select class="in" id="awRes">' +
+        '<option value="">—</option>' + Object.keys(RESULTS).map(k =>
+          '<option value="' + k + '"' + (a&&a.result===k?' selected':'') + '>' + RESULTS[k] + '</option>').join('') + '</select></div>' +
+    '</div>' +
+    '<div class="field"><label>Примечание</label><input class="in" id="awNote" value="' + esc(a?a.note:'') + '"></div>' +
+    '<button class="btn pri" data-act="award-save" data-id="' + (id||'') + '">Сохранить</button>');
+}
+
+function topicForm(id, uid, preset){
+  const t = id ? S.topics.find(x => x.id === id) : null;
+  const u = t ? t.u : (uid || (students()[0] || {}).id || '');
+  preset = preset || {};
+  const sel = (list, cur) => list.map(x =>
+    '<option value="' + esc(x) + '"' + (x===cur?' selected':'') + '>' + esc(x) + '</option>').join('');
+
+  modal('<h3>' + (t ? 'Изменить тему' : 'Тема для изучения') + '</h3>' +
+    (t || uid ? '<input type="hidden" id="tpTarget" value="one">' :
+      '<div class="field"><label>Кому назначить</label>' +
+      '<select class="in" id="tpTarget" data-act="tp-target">' +
+        '<option value="one">Одному ученику</option>' +
+        (teams().length ? '<option value="team">Всей команде</option>' : '') +
+        '<option value="role">Всем с ролью в команде</option>' +
+        '<option value="all">Всем ученикам</option>' +
+      '</select></div>') +
+    '<div class="field" id="tgOne"><label>Ученик</label><select class="in" id="tpU">' + studentOptions(u) + '</select></div>' +
+    '<div class="field hide" id="tgTeam"><label>Команда</label><select class="in" id="tpTeam">' + sel(teams(), preset.team) + '</select></div>' +
+    '<div class="field hide" id="tgRole"><label>Роль</label><select class="in" id="tpRole">' +
+      Object.keys(TEAM_ROLES).map(k => '<option value="' + k + '"' + (preset.role===k?' selected':'') +
+        '>' + TEAM_ROLES[k] + '</option>').join('') + '</select></div>' +
+    '<div class="row">' +
+      '<div class="field grow"><label>Тема</label><input class="in" id="tpTitle" value="' + esc(t ? t.title : (preset.title||'')) + '"></div>' +
+      '<div class="field" style="min-width:150px"><label>Предмет / направление</label><input class="in" id="tpSubj" value="' + esc(t ? t.subject : (preset.subject||'')) + '"></div>' +
+    '</div>' +
+    '<div class="row">' +
+      '<div class="field grow"><label>Статус</label><select class="in" id="tpStatus">' +
+        Object.keys(TSTAT).map(k => '<option value="' + k + '"' + (t&&t.status===k?' selected':'') + '>' + TSTAT[k] + '</option>').join('') + '</select></div>' +
+      '<div class="field grow"><label>Срок</label><input class="in" type="date" id="tpDue" value="' + (t?t.due:'') + '"></div>' +
+    '</div>' +
+    '<div class="field"><label>Примечание</label><input class="in" id="tpNote" value="' + esc(t?t.note:'') + '"></div>' +
+    '<button class="btn pri" data-act="topic-save" data-id="' + (id||'') + '">Сохранить</button>');
+
+  if(preset.target) {
+    const el = document.getElementById('tpTarget');
+    if(el){ el.value = preset.target; el.dispatchEvent(new Event('change', { bubbles:true })); }
+  }
+}
+
+/* кому назначается тема из формы */
+function topicTargets(){
+  const mode = (document.getElementById('tpTarget') || {}).value || 'one';
+  if(mode === 'one') return [val('tpU')];
+  if(mode === 'all') return students().map(p => p.id);
+  if(mode === 'team'){ const t = val('tpTeam'); return students().filter(p => p.team === t).map(p => p.id); }
+  const r = val('tpRole');
+  return students().filter(p => p.teamRole === r).map(p => p.id);
+}
+
+/* ================= НАСТРОЙКИ ================= */
+function viewSettings(){
+  const st = S.settings;
+  const sch = WD_ORDER.map(i =>
+    '<div class="field" style="width:92px;margin:0"><label>' + WD_SHORT[i] + '</label>' +
+    '<input class="in" type="number" min="0" step="0.5" id="sch' + i + '" value="' + nf(st.schedule[i]) + '"></div>').join('');
+
+  const hol = (st.holidays||[]).slice().sort((a,b) => a.date.localeCompare(b.date)).map(h =>
+    '<tr><td>' + human(h.date) + '</td><td class="muted">' + esc(h.note) + '</td>' +
+    '<td><button class="btn sm danger" data-act="hol-del" data-d="' + h.date + '">✕</button></td></tr>').join('');
+
+  const staff = staffList().map(p =>
+    '<tr><td>' + esc(p.name) + (p.id===S.me.id ? ' <span class="chip">это вы</span>' : '') + '</td>' +
+    '<td>' + ROLES[p.role] + '</td>' +
+    '<td>' + (p.active ? '' : '<span class="chip">архив</span>') + '</td>' +
+    '<td><div class="row" style="gap:6px">' +
+      '<button class="btn sm" data-act="reset-pin" data-id="' + p.id + '">Новый код</button>' +
+      (p.id !== S.me.id ? '<button class="btn sm" data-act="toggle-active" data-id="' + p.id + '">' +
+        (p.active ? 'В архив' : 'Вернуть') + '</button>' : '') +
+    '</div></td></tr>').join('');
+
+  return '<div class="head"><h2>Настройки</h2></div>' +
+
+    '<div class="sect"><h3>Кружок</h3>' +
+      '<div class="row">' +
+        '<div class="field grow" style="margin:0"><label>Название</label><input class="in" id="setName" value="' + esc(st.groupName) + '"></div>' +
+        '<div class="field" style="margin:0"><label>Учебный год с</label><input class="in" type="date" id="setFrom" value="' + st.yearStart + '"></div>' +
+        '<div class="field" style="margin:0"><label>по</label><input class="in" type="date" id="setTo" value="' + st.yearEnd + '"></div>' +
+      '</div></div>' +
+
+    '<div class="sect"><h3>Расписание: часов в день</h3>' +
+      '<div class="row">' + sch + '</div>' +
+      '<p class="small muted" style="margin:10px 0 0">0 — выходной. Сейчас в неделю: <b>' + nf(weekHours()) + ' ч</b>.</p>' +
+      '<div class="row" style="margin-top:14px"><button class="btn pri" data-act="save-settings">Сохранить настройки</button></div></div>' +
+
+    '<div class="sect"><h3>Каникулы и дни без занятий</h3>' +
+      '<div class="row">' +
+        '<input class="in" style="width:auto" type="date" id="holDate" value="' + todayStr() + '">' +
+        '<input class="in grow" id="holNote" placeholder="Причина: каникулы, праздник…">' +
+        '<button class="btn" data-act="hol-add">Добавить</button>' +
+      '</div>' +
+      (hol ? '<div class="scroll" style="margin-top:12px"><table><tbody>' + hol + '</tbody></table></div>'
+           : '<p class="muted small" style="margin:12px 0 0">Пока ничего не добавлено.</p>') + '</div>' +
+
+    '<div class="sect"><h3>Администраторы и помощники</h3>' +
+      '<div class="row">' +
+        '<input class="in grow" id="staffName" placeholder="Имя сотрудника">' +
+        '<select class="in" style="width:auto" id="staffRole">' +
+          '<option value="assistant">Помощник</option><option value="admin">Администратор</option></select>' +
+        '<button class="btn" data-act="add-staff">Добавить</button>' +
+      '</div>' +
+      '<div class="scroll" style="margin-top:12px"><table><thead><tr><th>Имя</th><th>Роль</th><th></th><th></th></tr></thead>' +
+      '<tbody>' + staff + '</tbody></table></div>' +
+      '<p class="small muted" style="margin:10px 0 0">Помощник может отмечать посещаемость, добавлять учеников, олимпиады и темы. ' +
+      'Менять настройки, роли и удалять данные может только администратор.</p></div>' +
+
+    '<div class="sect"><h3>Мой код входа</h3><div class="row">' +
+      '<input class="in" style="width:auto" id="pinOld" type="password" placeholder="Текущий код">' +
+      '<input class="in" style="width:auto" id="pinNew" type="password" placeholder="Новый код (4–8 цифр)">' +
+      '<button class="btn" data-act="change-pin">Изменить</button></div></div>';
+}
+
+/* ================= КАБИНЕТ УЧЕНИКА ================= */
+function viewMy(){
+  const id = S.me.id;
+  const st = statsFor(id, S.from, S.to);
+  const ym = S.month, y = Number(ym.slice(0,4)), mo = Number(ym.slice(5,7)) - 1;
+  const first = new Date(y, mo, 1), lastDay = new Date(y, mo+1, 0).getDate();
+  const lead = (first.getDay() + 6) % 7;
+  let cells = '';
+  for(let i=0;i<lead;i++) cells += '<div></div>';
+  for(let d=1; d<=lastDay; d++){
+    const ds = fmt(new Date(y, mo, d));
+    const m = markOf(ds, id);
+    const plan = planFor(ds);
+    const cls = m ? m.s : (plan ? '' : 'off');
+    cells += '<div class="cd ' + cls + '" title="' + human(ds) + (m ? ' — ' + ST[m.s].full : (plan ? ' — не отмечено' : ' — нет занятий')) + '">' +
+      '<b>' + d + '</b>' + (m ? '<span>' + ST[m.s].letter + '</span>' : '') + '</div>';
+  }
+
+  return '<div class="head"><h2>Мои занятия</h2>' +
+      '<span class="muted small">' + human(S.from) + ' — ' + human(S.to) + '</span></div>' +
+    '<div class="cards">' +
+      tile(st.percent + '%', '', 'Посещаемость') +
+      tile(nf(st.hoursFact), ' ч', 'Посещено из ' + nf(st.hoursPlan) + ' ч') +
+      tile(nf(st.hoursMissed), ' ч', 'Пропущено') +
+      tile(st.a, '', 'Пропусков') +
+      tile(st.e, '', 'По уважительной') +
+      tile(st.l, '', 'Опозданий') +
+    '</div>' +
+    '<div class="sect"><div class="head"><h3>' + MONTHS[mo] + ' ' + y + '</h3>' +
+      '<div class="row"><button class="btn sm" data-act="mon-shift" data-n="-1">‹</button>' +
+      '<button class="btn sm" data-act="mon-shift" data-n="1">›</button></div></div>' +
+      '<div class="calendar">' + WD_ORDER.map(i => '<div class="wd">' + WD_SHORT[i] + '</div>').join('') + cells + '</div>' +
+      '<div class="legend">' + ['p','l','e','a'].map(s =>
+        '<span><i class="dot" style="background:' + stColor(s) + '"></i>' + ST[s].full + '</span>').join('') + '</div></div>' +
+    '<div class="sect"><h3>Мои пропуски</h3>' +
+      (st.missDates.length
+        ? '<div class="scroll"><table><tbody>' + st.missDates.map(m =>
+            '<tr><td>' + human(m.d) + '</td><td>' + WD_SHORT[parseD(m.d).getDay()] + '</td>' +
+            '<td><span class="chip ' + (m.s==='a'?'coral':'gold') + '">' + ST[m.s].full + '</span></td>' +
+            '<td class="num">' + nf(m.h) + ' ч</td></tr>').join('') + '</tbody></table></div>'
+        : '<p class="muted">Пропусков нет — отлично!</p>') + '</div>';
+}
+
+function viewMyExtra(){
+  const aw = S.awards.filter(a => a.u === S.me.id).sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const tp = S.topics.filter(t => t.u === S.me.id);
+  return '<div class="head"><h2>Олимпиады и темы</h2></div>' +
+    '<div class="cards">' +
+      tile(aw.length, '', 'Олимпиад') +
+      tile(aw.filter(a => ['gold','silver','bronze'].indexOf(a.result)>=0).length, '', 'Призовых мест') +
+      tile(tp.filter(t => t.status!=='done').length, '', 'Тем изучить') +
+      tile(tp.filter(t => t.status==='done').length, '', 'Тем освоено') +
+    '</div>' +
+    '<div class="sect"><h3>Мои олимпиады</h3>' + awardsTable(aw, false) + '</div>' +
+    '<div class="sect"><h3>Мои темы</h3>' + topicsTable(tp, false) +
+      '<p class="small muted" style="margin:10px 0 0">Кнопка справа отмечает, что вы начали или освоили тему.</p></div>';
+}
+
+/* ================= ДЕЙСТВИЯ ================= */
+const val = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+const num = id => Number(val(id) || 0);
+
+async function act(a, el, ev){
+  switch(a){
+
+  /* --- журнал --- */
+  case 'day-shift': S.day = fmt(addDays(parseD(S.day), Number(el.dataset.n))); render(); break;
+  case 'day-today': S.day = todayStr(); render(); break;
+  case 'mark': {
+    const s = el.dataset.s, uid = el.dataset.id, cur = markOf(S.day, uid);
+    if(cur && cur.s === s) return;
+    await putMark(S.day, uid, s, (s==='p'||s==='l') ? planFor(S.day) : 0);
+    break;
+  }
+  case 'clear': await putMark(S.day, el.dataset.id, 'clear', 0); break;
+  case 'all-present': {
+    const list = students().filter(p => !p.since || p.since <= S.day);
+    const plan = planFor(S.day);
+    const items = list.filter(p => !markOf(S.day, p.id)).map(p => ({ u:p.id, s:'p', h:plan }));
+    if(!items.length){ say('Все уже отмечены.', 'warn'); return; }
+    const r = await call('setMarks', [S.token, S.day, items], 'Отмечено: ' + items.length);
+    if(r.ok){ r.v.forEach(m => { if(m) S.marks.push(m); }); reindex(); render(); }
+    break;
+  }
+  case 'all-clear': {
+    if(!confirm('Снять все отметки за ' + human(S.day) + '?')) return;
+    const items = S.marks.filter(m => m.d === S.day).map(m => ({ u:m.u, s:'clear' }));
+    if(!items.length) return;
+    const r = await call('setMarks', [S.token, S.day, items], 'Отметки сняты');
+    if(r.ok){ S.marks = S.marks.filter(m => m.d !== S.day); reindex(); render(); }
+    break;
+  }
+  case 'cycle': {
+    const ds = el.dataset.d, uid = el.dataset.id;
+    const order = ['p','l','e','a',''];
+    const m = markOf(ds, uid);
+    const next = order[(order.indexOf(m ? m.s : '') + 1) % order.length];
+    await putMark(ds, uid, next || 'clear', (next==='p'||next==='l') ? planFor(ds) : 0);
+    break;
+  }
+
+  /* --- периоды --- */
+  case 'mon-shift': {
+    const y = Number(S.month.slice(0,4)), mo = Number(S.month.slice(5,7)) - 1 + Number(el.dataset.n);
+    const d = new Date(y, mo, 1);
+    S.month = d.getFullYear() + '-' + pad(d.getMonth()+1);
+    render(); break;
+  }
+  case 'per-year': S.from = S.settings.yearStart; S.to = S.settings.yearEnd; render(); break;
+  case 'per-month': {
+    const t = new Date();
+    S.from = fmt(new Date(t.getFullYear(), t.getMonth(), 1));
+    S.to = fmt(new Date(t.getFullYear(), t.getMonth()+1, 0));
+    render(); break;
+  }
+  case 'sort': S.sort = el.dataset.k; render(); break;
+  case 'f-clear': S.fTeam = ''; S.fCat = ''; render(); break;
+  case 'plan-role': S.fRole = el.dataset.r; render(); break;
+  case 'plan-assign':
+    topicForm('', '', { title: el.dataset.t, subject: 'План года · ' + el.dataset.r + ' · неделя ' + el.dataset.n,
+                        target: PLAN_ROLE[el.dataset.r] ? 'role' : 'all', role: PLAN_ROLE[el.dataset.r] || '' });
+    break;
+  case 'comp-add': {
+    const title = val('compTitle');
+    if(!title){ say('Укажите название соревнования.', 'err'); return; }
+    const list = (S.settings.competitions||[]).concat([{ title, when: val('compWhen'), term: val('compTerm'), status:'' }]);
+    const r = await call('saveSettings', [S.token, { competitions: list }], 'Добавлено');
+    if(r.ok){ S.settings = r.v; render(); }
+    break;
+  }
+  case 'comp-del': {
+    const list = (S.settings.competitions||[]).filter((c,i) => i !== Number(el.dataset.i));
+    const r = await call('saveSettings', [S.token, { competitions: list }], 'Удалено');
+    if(r.ok){ S.settings = r.v; render(); }
+    break;
+  }
+
+  /* --- выгрузка --- */
+  case 'csv-report': csvReport(); break;
+  case 'csv-awards': csvAwards(); break;
+  case 'csv-topics': csvTopics(); break;
+
+  /* --- ученики --- */
+  case 'open-student': ev.preventDefault(); S.openStudent = el.dataset.id; S.tab = 'people'; render(); break;
+  case 'back-people': S.openStudent = ''; render(); break;
+  case 'add-student': {
+    const name = val('newName');
+    if(!name){ say('Введите имя.', 'err'); return; }
+    if(S.people.some(p => p.name.toLowerCase() === name.toLowerCase()) &&
+       !confirm('Участник с таким именем уже есть. Их будет сложно различить в списке входа. Всё равно добавить?')) return;
+    const r = await call('addStudent', [S.token, name, val('newSince'),
+      { cls: val('newCls'), team: val('newTeam'), category: val('newCat') }]);
+    if(r.ok){ S.people.push(r.v.person); render(); showPins([{ name:r.v.person.name, pin:r.v.pin }]); }
+    break;
+  }
+  case 'add-bulk': {
+    const names = val('bulkNames').split('\n').map(x => x.trim()).filter(Boolean);
+    if(!names.length){ say('Список пуст.', 'err'); return; }
+    const r = await call('addStudents', [S.token, names, val('bulkSince'),
+      { team: val('bulkTeam'), category: val('bulkCat') }]);
+    if(r.ok){
+      r.v.forEach(x => S.people.push(x.person));
+      render();
+      showPins(r.v.map(x => ({ name:x.person.name, pin:x.pin })), 'Добавлено учеников: ' + r.v.length);
+    }
+    break;
+  }
+  case 'reset-pin': {
+    const p = personById(el.dataset.id);
+    if(!confirm('Выдать новый код для «' + p.name + '»? Старый перестанет работать.')) return;
+    const r = await call('resetPin', [S.token, el.dataset.id]);
+    if(r.ok) showPins([{ name:p.name, pin:r.v.pin }], 'Новый код');
+    break;
+  }
+  case 'toggle-active': {
+    const p = personById(el.dataset.id);
+    const r = await call('savePerson', [S.token, p.id, { active: !p.active }], 'Сохранено');
+    if(r.ok){ Object.assign(p, r.v); render(); }
+    break;
+  }
+  case 'save-person': {
+    const p = personById(el.dataset.id);
+    const r = await call('savePerson', [S.token, p.id, {
+      name: val('edName'), since: val('edSince'), cls: val('edCls'),
+      team: val('edTeam'), category: val('edCat'), teamRole: val('edRole') }], 'Сохранено');
+    if(r.ok){ Object.assign(p, r.v); render(); }
+    break;
+  }
+  case 'delete-person': {
+    const p = personById(el.dataset.id);
+    if(!confirm('Удалить «' + p.name + '» вместе со всеми отметками, олимпиадами и темами? Это необратимо.')) return;
+    const r = await call('deletePerson', [S.token, p.id], 'Удалено');
+    if(r.ok){
+      S.people = S.people.filter(x => x.id !== p.id);
+      S.marks = S.marks.filter(x => x.u !== p.id);
+      S.awards = S.awards.filter(x => x.u !== p.id);
+      S.topics = S.topics.filter(x => x.u !== p.id);
+      S.openStudent = ''; reindex(); render();
+    }
+    break;
+  }
+
+  /* --- олимпиады --- */
+  case 'award-form': awardForm(el.dataset.id || '', el.dataset.u || ''); break;
+  case 'award-save': {
+    const a = { id: el.dataset.id || '', u: val('awU'), title: val('awTitle'), date: val('awDate'),
+                subject: val('awSubj'), level: val('awLevel'), result: val('awRes'), note: val('awNote') };
+    if(!a.title){ say('Укажите название олимпиады.', 'err'); return; }
+    const r = await call('saveAward', [S.token, a], 'Сохранено');
+    if(r.ok){
+      S.awards = S.awards.filter(x => x.id !== r.v.id).concat([r.v]);
+      closeModal(); render();
+    }
+    break;
+  }
+  case 'award-del': {
+    if(!confirm('Удалить запись?')) return;
+    const r = await call('deleteAward', [S.token, el.dataset.id], 'Удалено');
+    if(r.ok){ S.awards = S.awards.filter(x => x.id !== el.dataset.id); render(); }
+    break;
+  }
+
+  /* --- темы --- */
+  case 'topic-form': topicForm(el.dataset.id || '', el.dataset.u || '', null); break;
+  case 'topic-save': {
+    const base = { title: val('tpTitle'), subject: val('tpSubj'),
+                   status: val('tpStatus'), due: val('tpDue'), note: val('tpNote') };
+    if(!base.title){ say('Укажите тему.', 'err'); return; }
+    const ids = el.dataset.id ? [val('tpU')] : topicTargets();
+    if(!ids.length || !ids[0]){ say('Некому назначать: в этой группе нет учеников.', 'err'); return; }
+    if(el.dataset.id || ids.length === 1){
+      const t = Object.assign({ id: el.dataset.id || '', u: ids[0] }, base);
+      const r = await call('saveTopic', [S.token, t], 'Сохранено');
+      if(r.ok){ S.topics = S.topics.filter(x => x.id !== r.v.id).concat([r.v]); closeModal(); render(); }
+    } else {
+      const r = await call('saveTopics', [S.token, base, ids], 'Тема назначена: ' + ids.length + ' ученикам');
+      if(r.ok){ S.topics = S.topics.concat(r.v); closeModal(); render(); }
+    }
+    break;
+  }
+  case 'topic-next': {
+    const t = S.topics.find(x => x.id === el.dataset.id);
+    const next = { todo:'doing', doing:'done', done:'todo' }[t.status];
+    const r = await call('setTopicStatus', [S.token, t.id, next]);
+    if(r.ok){ t.status = next; render(); }
+    break;
+  }
+  case 'topic-del': {
+    if(!confirm('Удалить тему?')) return;
+    const r = await call('deleteTopic', [S.token, el.dataset.id], 'Удалено');
+    if(r.ok){ S.topics = S.topics.filter(x => x.id !== el.dataset.id); render(); }
+    break;
+  }
+
+  /* --- настройки --- */
+  case 'save-settings': {
+    const schedule = [0,1,2,3,4,5,6].map(i => num('sch' + i));
+    const patch = { groupName: val('setName'), yearStart: val('setFrom'), yearEnd: val('setTo'), schedule };
+    if(patch.yearStart > patch.yearEnd){ say('Начало учебного года позже конца.', 'err'); return; }
+    const r = await call('saveSettings', [S.token, patch], 'Настройки сохранены');
+    if(r.ok){ S.settings = r.v; render(); }
+    break;
+  }
+  case 'hol-add': {
+    const date = val('holDate');
+    if(!date) return;
+    const list = (S.settings.holidays||[]).filter(h => h.date !== date).concat([{ date, note: val('holNote') }]);
+    const r = await call('saveSettings', [S.token, { holidays: list }], 'Добавлено');
+    if(r.ok){ S.settings = r.v; render(); }
+    break;
+  }
+  case 'hol-del': {
+    const list = (S.settings.holidays||[]).filter(h => h.date !== el.dataset.d);
+    const r = await call('saveSettings', [S.token, { holidays: list }], 'Удалено');
+    if(r.ok){ S.settings = r.v; render(); }
+    break;
+  }
+  case 'add-staff': {
+    const name = val('staffName');
+    if(!name){ say('Введите имя.', 'err'); return; }
+    const r = await call('addStaff', [S.token, name, val('staffRole')]);
+    if(r.ok){ S.people.push(r.v.person); render(); showPins([{ name:r.v.person.name, pin:r.v.pin }]); }
+    break;
+  }
+  case 'change-pin': {
+    const r = await call('changePin', [S.token, val('pinOld'), val('pinNew')], 'Код изменён');
+    if(r.ok){ document.getElementById('pinOld').value = ''; document.getElementById('pinNew').value = ''; }
+    break;
+  }
+
+  /* --- адрес сервера --- */
+  case 'change-api': {
+    const cur = LS.get(K_API) || DEFAULT_API_URL || '';
+    LS.del(K_API);
+    show('setup');
+    const f = document.getElementById('apiUrl');
+    if(f) f.value = cur;
+    document.getElementById('setupMsg').textContent =
+      'Адрес веб-приложения меняется, если сделать новое развёртывание Apps Script.';
+    break;
+  }
+
+  /* --- окно --- */
+  case 'modal-close': closeModal(); break;
+  case 'modal-bg': if(ev.target === el) closeModal(); break;
+  }
+}
+
+async function putMark(ds, uid, status, hours, note){
+  const r = await call('setMark', [S.token, ds, uid, status, hours, note || '']);
+  if(!r.ok) return;
+  S.marks = S.marks.filter(m => !(m.d === ds && m.u === uid));
+  if(r.v) S.marks.push(r.v);
+  reindex();
+  render();
+}
+
+document.addEventListener('click', ev => {
+  const tabEl = ev.target.closest('[data-tab]');
+  if(tabEl){ S.tab = tabEl.dataset.tab; S.openStudent = ''; S.q = ''; render(); return; }
+  const el = ev.target.closest('[data-act]');
+  if(el) act(el.dataset.act, el, ev);
+});
+
+let qTimer = null;
+document.addEventListener('input', ev => {
+  const el = ev.target.closest('[data-act="q"]');
+  if(!el) return;
+  S.q = el.value;
+  clearTimeout(qTimer);
+  qTimer = setTimeout(() => {
+    render();
+    const n = document.querySelector('[data-act="q"]');
+    if(n){ n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
+  }, 300);
+});
+
+document.addEventListener('change', ev => {
+  const el = ev.target.closest('[data-act]');
+  if(!el) return;
+  const a = el.dataset.act;
+  if(a === 'f-team'){ S.fTeam = el.value; render(); }
+  else if(a === 'f-cat'){ S.fCat = el.value; render(); }
+  else if(a === 'tp-target'){
+    const mode = el.value;
+    document.getElementById('tgOne').classList.toggle('hide', mode !== 'one');
+    document.getElementById('tgTeam').classList.toggle('hide', mode !== 'team');
+    document.getElementById('tgRole').classList.toggle('hide', mode !== 'role');
+  }
+  else if(a === 'day-set'){ S.day = el.value; render(); }
+  else if(a === 'mon-set'){ S.month = el.value; render(); }
+  else if(a === 'from'){ S.from = el.value; render(); }
+  else if(a === 'to'){ S.to = el.value; render(); }
+  else if(a === 'hours'){
+    const uid = el.dataset.id, m = markOf(S.day, uid);
+    if(m) putMark(S.day, uid, m.s, Math.min(planFor(S.day), Math.max(0, Number(el.value)||0)));
+  }
+});
+
+/* ================= запуск ================= */
+document.getElementById('apiSave').addEventListener('click', async () => {
+  let url = document.getElementById('apiUrl').value.trim();
+  const msg = document.getElementById('setupMsg');
+  if(!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)){
+    msg.textContent = 'Адрес должен начинаться с https://script.google.com/ и оканчиваться на /exec';
+    return;
+  }
+  msg.textContent = 'Проверяем связь…';
+  S.api = url;
+  try {
+    await api('boot', []);
+    LS.set(K_API, url);
+    msg.textContent = 'Связь есть.';
+    boot();
+  } catch(e){
+    msg.textContent = e.message;
+  }
+});
+document.getElementById('doLogin').addEventListener('click', doLogin);
+document.getElementById('pin').addEventListener('keydown', e => { if(e.key === 'Enter') doLogin(); });
+document.getElementById('themeBtn').addEventListener('click', () => setTheme(!document.body.classList.contains('dark')));
+document.getElementById('outBtn').addEventListener('click', () => { if(confirm('Выйти из аккаунта?')) logout(); });
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+
+boot();
+</script>
+</body>
+</html>
