@@ -314,6 +314,9 @@ body.dark .sync{background:var(--gold); color:var(--navy)}
 
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
+/* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
+const SITE_BUILD = '2026-09-14-4';
+
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
 const NEED_VERSION = '2026-09-14-3';
@@ -673,6 +676,22 @@ function setTheme(dark){
   if(foot) foot.src = dark ? 'assets/logo-mark-inverse.png' : 'assets/logo-mark.png';
 }
 
+/* Страница кешируется ради мгновенного открытия, поэтому проверяем,
+   не вышла ли новая сборка, и один раз перезагружаемся начисто. */
+async function checkSiteUpdate(){
+  try {
+    const r = await fetch('index.html?_=' + Date.now(), { cache: 'no-store' });
+    if(!r.ok) return;
+    const m = (await r.text()).match(/const SITE_BUILD = '([^']+)'/);
+    if(!m || m[1] === SITE_BUILD) return;
+    let seen = null;
+    try { seen = sessionStorage.getItem('attBuild'); } catch(e){}
+    if(seen === m[1]) return;                     // уже пробовали — не зацикливаемся
+    try { sessionStorage.setItem('attBuild', m[1]); } catch(e){}
+    await hardReload();
+  } catch(e){}
+}
+
 /* ================= вход и загрузка ================= */
 function show(id){
   ['setup','splash','gate','app'].forEach(x => document.getElementById(x).classList.toggle('hide', x !== id));
@@ -844,7 +863,8 @@ function versionWarning(){
   if(!v && !versionKnown) return '';  // ответа ещё нет
   if(!v) return '<div class="msg warn">Серверный код устарел (в нём нет даже метки версии). ' +
     'Обновите Code.gs в Apps Script и выпустите новую версию развёртывания — иначе дни рождения, ' +
-    'календарь и сводка достижений работать не будут.</div>';
+    'календарь и сводка достижений работать не будут. <span class="small">(сборка сайта ' +
+    SITE_BUILD + ')</span></div>';
   if(v < NEED_VERSION) return '<div class="msg warn">Серверный код старее сайта: ' + esc(v) +
     ', нужен ' + NEED_VERSION + '. Обновите Code.gs в Apps Script и выпустите новую версию развёртывания.</div>';
   return '';
@@ -1832,6 +1852,7 @@ function viewSettings(){
 
     '<div class="sect"><h3>Проверка сервера</h3>' +
       '<table><tbody>' +
+        '<tr><td>Сборка сайта</td><td><b>' + SITE_BUILD + '</b></td></tr>' +
         '<tr><td>Версия серверного кода</td><td><b>' + (S.version || 'нет метки — код устарел') + '</b>' +
           (S.version === NEED_VERSION ? ' <span class="chip done">актуальна</span>'
                                       : ' <span class="chip coral">нужна ' + NEED_VERSION + '</span>') + '</td></tr>' +
@@ -2313,6 +2334,7 @@ if('serviceWorker' in navigator){
 }
 
 boot();
+setTimeout(checkSiteUpdate, 1500);
 </script>
 </body>
 </html>
