@@ -352,7 +352,15 @@ const S = {
 function api(fn, args){
   const url = S.api + '?p=' + encodeURIComponent(JSON.stringify({ fn, args: args||[] })) + '&_=' + Date.now();
   return fetch(url, { method:'GET', cache:'no-store' })
-    .then(r => { if(!r.ok) throw new Error('Сервер ответил ошибкой ' + r.status + '.'); return r.json(); })
+    .then(r => {
+      if(r.status === 404){
+        const e = new Error('Сервер по старому адресу больше не отвечает (404). Обновляем приложение…');
+        e.stale = true;
+        throw e;
+      }
+      if(!r.ok) throw new Error('Сервер ответил ошибкой ' + r.status + '.');
+      return r.json();
+    })
     .catch(e => { if(e instanceof SyntaxError) throw new Error('Сервер вернул непонятный ответ. Проверьте адрес /exec.'); throw (e.message ? e : new Error('Нет связи с сервером.')); })
     .then(d => {
       if(!d.ok) throw new Error(d.error || 'Ошибка сервера.');
@@ -470,9 +478,41 @@ async function call(fn, args, okMsg){
     return { ok:true, v };
   } catch(e){
     if(String(e.message) === 'AUTH'){ logout(true); return { ok:false, v:null }; }
+    if(e.stale){ handleStale('banner'); return { ok:false, v:null }; }
     say(e.message, 'err');
     return { ok:false, v:null };
   } finally { S.busy = false; }
+}
+
+/* ================= устаревшая копия страницы =================
+   Страница хранится в памяти телефона, и если адрес сервера сменился,
+   старая копия стучится в несуществующее развёртывание. Тогда один раз
+   перезагружаем приложение начисто. */
+const K_RELOADED = 'attReloaded';
+
+async function hardReload(){
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r => r.unregister()));
+  } catch(e){}
+  try {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+  } catch(e){}
+  location.reload();
+}
+
+function handleStale(where){
+  let once = null;
+  try { once = sessionStorage.getItem(K_RELOADED); } catch(e){}
+  if(!once){
+    try { sessionStorage.setItem(K_RELOADED, '1'); } catch(e){}
+    hardReload();
+    return;
+  }
+  const el = document.getElementById(where || 'banner');
+  if(el) el.innerHTML = '<div class="msg err">У вас открыта старая копия страницы, а её сервер удалён. ' +
+    '<button class="btn sm" data-act="hard-reload" style="margin-left:8px">Обновить приложение</button></div>';
 }
 
 /* ================= тема ================= */
@@ -561,6 +601,7 @@ async function showGate(){
     LS.set(K_ROSTER, b);
     fillRoster(b);
   } catch(e){
+    if(e.stale){ handleStale('gateMsg'); return; }
     if(!(saved && saved.roster && saved.roster.length)) sel.innerHTML = '<option value="">—</option>';
     say(e.message, 'err', 'gateMsg');
   }
@@ -582,7 +623,7 @@ async function doLogin(){
     say('', '', 'gateMsg');
     apply(st);
   } catch(e){
-    say(e.message, 'err', 'gateMsg');
+    if(e.stale) handleStale('gateMsg'); else say(e.message, 'err', 'gateMsg');
   } finally {
     clearTimeout(slow);
     btn.disabled = false; btn.textContent = 'Войти';
@@ -1641,6 +1682,8 @@ async function act(a, el, ev){
     if(r.ok){ document.getElementById('pinOld').value = ''; document.getElementById('pinNew').value = ''; }
     break;
   }
+
+  case 'hard-reload': hardReload(); break;
 
   /* --- адрес сервера --- */
   case 'change-api': {
