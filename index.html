@@ -321,7 +321,7 @@ body.dark .sync{background:var(--gold); color:var(--navy)}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-14-6';
+const SITE_BUILD = '2026-09-15';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
@@ -1889,8 +1889,8 @@ function viewSettings(){
       '<table><tbody>' +
         '<tr><td>Сборка сайта</td><td><b>' + SITE_BUILD + '</b></td></tr>' +
         '<tr><td>Версия серверного кода</td><td><b>' + (S.version || 'нет метки — код устарел') + '</b>' +
-          (S.version === NEED_VERSION ? ' <span class="chip done">актуальна</span>'
-                                      : ' <span class="chip coral">нужна ' + NEED_VERSION + '</span>') + '</td></tr>' +
+          (S.version >= NEED_VERSION ? ' <span class="chip done">актуальна</span>'
+                                     : ' <span class="chip coral">нужна ' + NEED_VERSION + '</span>') + '</td></tr>' +
         (S.stats ? '<tr><td>Учеников в составе</td><td>' + S.stats.students + '</td></tr>' +
           '<tr><td>С заполненной датой рождения</td><td>' + S.stats.withBirth +
             (S.stats.withBirth === 0 ? ' <span class="chip coral">запустите importBirthdays</span>' : '') + '</td></tr>' +

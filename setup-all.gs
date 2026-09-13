@@ -29,7 +29,7 @@
  *  Установка описана в attendance/README.md
  *************************************************************/
 
-var VERSION = '2026-09-14-3';         // метка версии кода: видна в ответе сервера
+var VERSION = '2026-09-15';         // метка версии кода: видна в ответе сервера
 var SHEET_ID = '';                    // пусто = скрипт привязан к таблице
 var FIRST_ADMIN_NAME = 'Администратор';
 var SESSION_DAYS = 90;                // сколько дней держится вход
@@ -1000,6 +1000,54 @@ function importSchoolAwards() {
     added++;
   });
   return tell_('Достижений школы добавлено: ' + added + '\nВсего в таблице: ' + rows_('school').length);
+}
+
+/*************************************************************
+ *  Если строки в лист people добавляли руками, у них нет id и кода —
+ *  сайт такие строки не показывает. Эта функция их чинит:
+ *  проставляет id, роль, дату зачисления и выдаёт коды для входа.
+ *  Запускать по мере надобности, лишнего не трогает.
+ *************************************************************/
+function fixPeopleSheet() {
+  var sh = sheet_('people');
+  var vals = sh.getDataRange().getValues();
+  var head = vals[0], col = {};
+  head.forEach(function (h, i) { col[h] = i; });
+  var fixed = [], renamedPins = [];
+
+  for (var r = 1; r < vals.length; r++) {
+    var row = vals[r];
+    var name = String(row[col.name] || '').trim();
+    if (!name) continue;                       // пустая строка — пропускаем
+    var changed = false;
+
+    if (!String(row[col.id] || '').trim()) {
+      row[col.id] = newId_(String(row[col.role]) === 'student' || !row[col.role] ? 's' : 'u');
+      changed = true;
+    }
+    if (!String(row[col.role] || '').trim()) { row[col.role] = 'student'; changed = true; }
+    if (String(row[col.active]) === '') { row[col.active] = 1; changed = true; }
+    if (!String(row[col.since] || '').trim()) { row[col.since] = today_(); changed = true; }
+    if (!String(row[col.createdAt] || '').trim()) { row[col.createdAt] = today_(); changed = true; }
+    if (!String(row[col.pinHash] || '').trim() || !String(row[col.salt] || '').trim()) {
+      var pin = genPin_(String(row[col.role]) === 'student' ? 4 : 6);
+      var salt = rndStr_(12);
+      row[col.salt] = salt;
+      row[col.pinHash] = hashPin_(pin, salt);
+      renamedPins.push({ name: name, pin: pin });
+      changed = true;
+    }
+    if (changed) { sh.getRange(r + 1, 1, 1, head.length).setValues([row]); fixed.push(name); }
+  }
+
+  forget_('people');      // строки читались до правок — перечитаем заново
+  dropBootCache_();
+  var msg = fixed.length
+    ? 'Починено строк: ' + fixed.length + '\n' + fixed.join(', ') +
+      (renamedPins.length ? '\n\nВыданы коды:\n' +
+        renamedPins.map(function (x) { return x.name + ' — ' + x.pin; }).join('\n') : '')
+    : 'Всё в порядке, чинить нечего.';
+  return tell_(msg);
 }
 
 /** Сброс кода администратора, если он потерян. */
