@@ -221,13 +221,54 @@ body.dark .sync{background:var(--gold); color:var(--navy)}
 .foot img{height:26px; opacity:.75; display:block; margin:0 auto 8px}
 
 @media (max-width:620px){
+  .wrap{padding:12px 12px 90px}
   .top img{height:30px}
-  .top .who{font-size:12px; max-width:34%}
+  .top .who{font-size:12px; max-width:38%}
   .top .brand span{display:none}
-  .wrap{padding:14px 12px 70px}
-  .tile b{font-size:22px}
-  .plist li{gap:8px}
-  .pname{min-width:100%}
+  .head h2{font-size:19px}
+  .head{gap:6px; margin-bottom:10px}
+
+  /* вкладки прилипают под шапкой, справа подсказка, что список едет дальше */
+  .tabs{position:sticky; top:var(--topH,52px); z-index:20; background:var(--bg);
+        margin:0 -12px 12px; padding:0 12px; scrollbar-width:none;
+        -webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);
+        mask-image:linear-gradient(90deg,#000 88%,transparent)}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{padding:10px 11px; font-size:14px}
+
+  /* день и фильтры — по одной компактной строке */
+  .daybar{flex-wrap:nowrap; gap:6px}
+  .daybar .in{flex:1; min-width:0}
+  .daybar .btn{padding:9px 10px; white-space:nowrap}
+  .fbar label{flex:1; min-width:0; font-size:0}
+  .fbar label select{font-size:14px; width:100% !important}
+  .fbar > span.muted{display:none}
+
+  /* строка ученика: имя сверху, кнопки во всю ширину */
+  .plist li{padding:7px 0; gap:6px}
+  .pname{flex:1 0 100%; min-width:0; display:flex; align-items:baseline; gap:6px; font-size:15px}
+  .pname i{display:inline; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .seg{flex:1 1 auto}
+  .seg button{flex:1; padding:11px 2px; font-size:12.5px}
+  .hin{width:58px; padding:9px 4px}
+
+  .sect{padding:14px 12px; margin-bottom:12px}
+  .cards{grid-template-columns:repeat(2,1fr); gap:8px}
+  .tile{padding:11px}
+  .tile b{font-size:21px}
+  th,td{padding:7px 8px}
+  .btn{padding:10px 14px}
+  .btn.sm{padding:8px 11px}
+  .opt{display:none}                 /* второстепенные колонки таблиц */
+  .strip{font-size:13.5px; padding:9px 12px}
+  .comp{padding:12px}
+  .modal{padding:10px}
+  .modal .box{padding:16px 14px}
+  .calendar{max-width:100%}
+  .foot{padding:18px 12px 30px}
+}
+@media (max-width:380px){
+  .seg button{padding:11px 1px; font-size:11.5px}
 }
 </style>
 </head>
@@ -321,7 +362,7 @@ body.dark .sync{background:var(--gold); color:var(--navy)}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-15-2';
+const SITE_BUILD = '2026-09-15-4';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
@@ -433,7 +474,7 @@ function filterBar(){
   if(!teams().length && !cats().length) return '';
   const opt = (list, cur) => '<option value="">Все</option>' +
     list.map(x => '<option value="' + esc(x) + '"' + (x===cur?' selected':'') + '>' + esc(x) + '</option>').join('');
-  return '<div class="row" style="margin-bottom:14px">' +
+  return '<div class="row fbar" style="margin-bottom:14px">' +
     (teams().length ? '<label class="small muted nowrap">Команда ' +
       '<select class="in" style="width:auto" data-act="f-team">' + opt(teams(), S.fTeam) + '</select></label>' : '') +
     (cats().length ? '<label class="small muted nowrap">Категория ' +
@@ -466,6 +507,7 @@ const yearsWord = n => n + ' ' + plural(n, 'год', 'года', 'лет');
 const daysWord = n => n === 0 ? 'сегодня' : n === 1 ? 'завтра'
   : 'через ' + n + ' ' + plural(n, 'день', 'дня', 'дней');
 const dayMonth = ds => { const d = parseD(ds); return d.getDate() + ' ' + MON_GEN[d.getMonth()]; };
+const narrow = () => window.innerWidth < 620;
 
 function bdayInfo(person){
   const b = person && person.birth;
@@ -494,6 +536,8 @@ function bdayPart(){
   if(today.length) return { hot:true, html:'🎂 Сегодня день рождения: ' +
     today.map(x => '<b>' + esc(x.p.name) + '</b> — ' + yearsWord(x.b.age)).join(', ') + '. Поздравьте!' };
   const n = list[0];
+  if(narrow()) return { hot:false, html:'🎂 <b>' + esc(n.p.name) + '</b> — ' +
+    dayMonth(n.b.date) + ', ' + daysWord(n.b.days) };
   return { hot:false, html:'🎂 Ближайший день рождения: <b>' + esc(n.p.name) + '</b>, ' +
     dayMonth(n.b.date) + ' — ' + daysWord(n.b.days) + ' (' + yearsWord(n.b.age) + ')' };
 }
@@ -516,8 +560,10 @@ function compPart(){
   const tail = mine ? ' · <b>вы в составе</b>'
     : (isStaff() && squad ? ' · состав: ' + squad : '');
   if(days === 0) return { hot:true, html:'🏆 Сегодня старт: <b>' + esc(c.title) + '</b>' + tail };
+  const when = c.dateFrom ? dayMonth(c.dateFrom) : esc(c.when);
+  if(narrow()) return { hot: days <= 14, html:'🏆 <b>' + esc(c.title) + '</b> — ' + daysWord(days) + tail };
   return { hot: days <= 14, html:'🏆 Ближайший старт: <b>' + esc(c.title) + '</b>, ' +
-    (c.dateFrom ? dayMonth(c.dateFrom) : esc(c.when)) + ' — ' + daysWord(days) + tail };
+    when + ' — ' + daysWord(days) + tail };
 }
 
 function bdayBanner(){
@@ -906,6 +952,8 @@ function versionWarning(){
 }
 
 function render(){
+  const topEl = document.querySelector('.top');
+  if(topEl) document.documentElement.style.setProperty('--topH', topEl.offsetHeight + 'px');
   document.getElementById('warn').innerHTML = versionWarning();
   document.getElementById('topName').textContent = S.settings.groupName || 'Кружок';
   const tabs = tabList();
@@ -1069,16 +1117,16 @@ function viewReport(){
       '<td><a href="#" data-act="open-student" data-id="' + r.p.id + '">' + esc(r.p.name) + '</a>' +
         (r.p.active ? '' : ' <span class="chip">в архиве</span>') +
         (who(r.p) ? '<br><span class="muted small">' + esc(who(r.p)) + '</span>' : '') + '</td>' +
-      '<td class="num">' + st.held + '</td>' +
-      '<td class="num">' + st.p + '</td>' +
+      '<td class="num opt">' + st.held + '</td>' +
+      '<td class="num opt">' + st.p + '</td>' +
       '<td class="num">' + st.l + '</td>' +
       '<td class="num">' + st.e + '</td>' +
       '<td class="num"><b>' + st.a + '</b></td>' +
-      '<td class="num muted">' + st.unmarked + '</td>' +
-      '<td class="num">' + nf(st.hoursPlan) + '</td>' +
+      '<td class="num muted opt">' + st.unmarked + '</td>' +
+      '<td class="num opt">' + nf(st.hoursPlan) + '</td>' +
       '<td class="num">' + nf(st.hoursFact) + '</td>' +
       '<td class="num" style="color:var(--coral)">' + nf(st.hoursMissed) + '</td>' +
-      '<td class="num">' + nf(st.hoursExcused) + '</td>' +
+      '<td class="num opt">' + nf(st.hoursExcused) + '</td>' +
       '<td class="pctcell"><div class="row nowrapflex"><span class="nowrap">' + st.percent + '%</span>' +
         '<div class="bar grow"><i style="width:' + Math.min(100, st.percent) + '%;background:' +
         (st.percent >= 90 ? 'var(--blue)' : st.percent >= 75 ? 'var(--gold)' : 'var(--coral)') + '"></i></div></div></td>' +
@@ -1111,11 +1159,11 @@ function viewReport(){
     '</div>' +
 
     '<div class="sect"><div class="scroll"><table><thead><tr>' +
-      '<th></th>' + th('name','Ученик') + '<th class="num">Проведено</th>' +
-      '<th class="num">Был</th>' + th('late','Опозд.','num') + th('excused','Уваж.','num') +
-      th('miss','Пропусков','num') + '<th class="num">Не отм.</th>' +
-      '<th class="num">Часы план</th>' + th('fact','Часы посещено','num') +
-      th('miss','Пропущ. ч','num') + '<th class="num">Уваж. ч</th>' + th('pct','Посещаемость') +
+      '<th></th>' + th('name','Ученик') + '<th class="num opt">Проведено</th>' +
+      '<th class="num opt">Был</th>' + th('late','Опозд.','num') + th('excused','Уваж.','num') +
+      th('miss','Пропусков','num') + '<th class="num opt">Не отм.</th>' +
+      '<th class="num opt">Часы план</th>' + th('fact','Часы посещено','num') +
+      th('miss','Пропущ. ч','num') + '<th class="num opt">Уваж. ч</th>' + th('pct','Посещаемость') +
       '</tr></thead><tbody>' + (body || '<tr><td colspan="13" class="muted">Нет данных</td></tr>') + '</tbody></table></div></div>';
 }
 
@@ -1191,13 +1239,13 @@ function viewPeople(){
       '<td><a href="#" data-act="open-student" data-id="' + p.id + '">' + esc(p.name) + '</a>' +
         (p.active ? '' : ' <span class="chip">архив</span>') + '</td>' +
       '<td>' + esc(p.cls) + '</td>' +
-      '<td>' + (p.team ? '<span class="chip">' + esc(p.team) + '</span>' : '') + '</td>' +
-      '<td>' + esc(p.category) + '</td>' +
-      '<td class="muted small">' + (p.teamRole ? TEAM_ROLES[p.teamRole] || p.teamRole : '') + '</td>' +
+      '<td class="opt">' + (p.team ? '<span class="chip">' + esc(p.team) + '</span>' : '') + '</td>' +
+      '<td class="opt">' + esc(p.category) + '</td>' +
+      '<td class="muted small opt">' + (p.teamRole ? TEAM_ROLES[p.teamRole] || p.teamRole : '') + '</td>' +
       '<td class="num">' + st.percent + '%</td>' +
       '<td class="num">' + st.a + '</td>' +
-      '<td class="num">' + S.awards.filter(a => a.u === p.id).length + '</td>' +
-      '<td class="num">' + S.topics.filter(t => t.u === p.id && t.status !== 'done').length + '</td>' +
+      '<td class="num opt">' + S.awards.filter(a => a.u === p.id).length + '</td>' +
+      '<td class="num opt">' + S.topics.filter(t => t.u === p.id && t.status !== 'done').length + '</td>' +
       '<td><div class="row" style="gap:6px">' +
         '<button class="btn sm" data-act="reset-pin" data-id="' + p.id + '">Новый код</button>' +
         (isAdmin() ? '<button class="btn sm" data-act="toggle-active" data-id="' + p.id + '">' +
@@ -1229,9 +1277,9 @@ function viewPeople(){
           '<button class="btn" data-act="add-bulk">Добавить всех</button></div>' +
       '</details></div>' +
     '<div class="sect"><div class="scroll"><table><thead><tr>' +
-      '<th>Ученик</th><th>Класс</th><th>Команда</th><th>Кат.</th><th>Роль</th>' +
+      '<th>Ученик</th><th>Класс</th><th class="opt">Команда</th><th class="opt">Кат.</th><th class="opt">Роль</th>' +
       '<th class="num">Посещ.</th><th class="num">Проп.</th>' +
-      '<th class="num">Олимп.</th><th class="num">Тем</th><th></th></tr></thead><tbody>' +
+      '<th class="num opt">Олимп.</th><th class="num opt">Тем</th><th></th></tr></thead><tbody>' +
       (body || '<tr><td colspan="11" class="muted">Список пуст</td></tr>') + '</tbody></table></div>' +
       '<p class="small muted" style="margin:10px 0 0">Посещаемость и пропуски — за период ' + human(S.from) + ' — ' + human(S.to) + '.</p></div>';
 }
@@ -1886,7 +1934,7 @@ function viewSettings(){
       'Менять настройки, роли и удалять данные может только администратор.</p></div>' +
 
     '<div class="sect"><h3>Проверка сервера</h3>' +
-      '<table><tbody>' +
+      '<div class="scroll"><table><tbody>' +
         '<tr><td>Сборка сайта</td><td><b>' + SITE_BUILD + '</b></td></tr>' +
         '<tr><td>Версия серверного кода</td><td><b>' + (S.version || 'нет метки — код устарел') + '</b>' +
           (S.version >= NEED_VERSION ? ' <span class="chip done">актуальна</span>'
@@ -1899,13 +1947,13 @@ function viewSettings(){
           '<tr><td>Пунктов годового плана</td><td>' + S.stats.plan + '</td></tr>' +
           '<tr><td>Достижений школы</td><td>' + (S.stats.school || 0) +
             (!S.stats.school ? ' <span class="chip coral">запустите importSchoolAwards</span>' : '') + '</td></tr>' : '') +
-      '</tbody></table>' +
+      '</tbody></table></div>' +
       '<div class="row" style="margin-top:12px"><button class="btn sm" data-act="ping">Замерить скорость</button>' +
         '<span id="pingOut" class="muted small"></span></div></div>' +
 
     '<div class="sect"><h3>Мой код входа</h3><div class="row">' +
-      '<input class="in" style="width:auto" id="pinOld" type="password" placeholder="Текущий код">' +
-      '<input class="in" style="width:auto" id="pinNew" type="password" placeholder="Новый код (4–8 цифр)">' +
+      '<input class="in grow" id="pinOld" type="password" placeholder="Текущий код">' +
+      '<input class="in grow" id="pinNew" type="password" placeholder="Новый код (4–8 цифр)">' +
       '<button class="btn" data-act="change-pin">Изменить</button></div></div>';
 }
 
@@ -2371,6 +2419,12 @@ if('serviceWorker' in navigator){
 
 boot();
 setTimeout(checkSiteUpdate, 1500);
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if(S.me) render(); }, 250);
+});
 </script>
 </body>
 </html>
