@@ -29,7 +29,7 @@
  *  Установка описана в attendance/README.md
  *************************************************************/
 
-var VERSION = '2026-09-14-2';         // метка версии кода: видна в ответе сервера
+var VERSION = '2026-09-14-3';         // метка версии кода: видна в ответе сервера
 var SHEET_ID = '';                    // пусто = скрипт привязан к таблице
 var FIRST_ADMIN_NAME = 'Администратор';
 var SESSION_DAYS = 90;                // сколько дней держится вход
@@ -131,6 +131,20 @@ function dstr_(v) {
   if (v instanceof Date) return Utilities.formatDate(v, tz_(), 'yyyy-MM-dd');
   return String(v == null ? '' : v).trim();
 }
+/* Дату в таблице могут вписать как угодно: 24.03.2012, 24/03/2012, 2012-03-24
+   или обычной датой Google. Приводим всё к виду ГГГГ-ММ-ДД. */
+function looseDate_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, tz_(), 'yyyy-MM-dd');
+  var t = String(v == null ? '' : v).trim();
+  if (!t) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  var m = t.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{4})$/);   // 24.03.2012
+  if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  m = t.match(/^(\d{4})[.\/](\d{1,2})[.\/](\d{1,2})$/);            // 2012/03/24
+  if (m) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+  return '';
+}
+
 function today_() { return Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd'); }
 function nowIso_() { return Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd HH:mm:ss'); }
 function newId_(prefix) {
@@ -212,10 +226,10 @@ function personPub_(p) {
   return {
     id: String(p.id), role: String(p.role), name: String(p.name),
     active: String(p.active) !== '0' && p.active !== false,
-    since: dstr_(p.since), createdAt: dstr_(p.createdAt), note: String(p.note || ''),
+    since: looseDate_(p.since), createdAt: dstr_(p.createdAt), note: String(p.note || ''),
     cls: String(p.cls || ''), team: String(p.team || ''),
     category: String(p.category || ''), teamRole: String(p.teamRole || ''),
-    birth: dstr_(p.birth)
+    birth: looseDate_(p.birth)
   };
 }
 
