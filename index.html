@@ -217,6 +217,13 @@ button.cell{cursor:pointer}
       padding:8px 14px; border-radius:99px; font-size:13px; box-shadow:var(--shadow)}
 body.dark .sync{background:var(--gold); color:var(--navy)}
 .pending{opacity:.55}
+.ava{width:34px; height:34px; border-radius:50%; flex:none; object-fit:cover; background:var(--sunk);
+     border:1px solid var(--line); display:inline-flex; align-items:center; justify-content:center;
+     font-size:12.5px; font-weight:600; color:var(--muted); overflow:hidden; text-transform:uppercase}
+.ava.big{width:88px; height:88px; font-size:28px}
+.ava.sm{width:26px; height:26px; font-size:10.5px}
+img.ava{display:block}
+.avarow{display:flex; align-items:center; gap:10px}
 .foot{text-align:center; color:var(--muted); font-size:12px; padding:24px 16px 40px}
 .foot img{height:26px; opacity:.75; display:block; margin:0 auto 8px}
 
@@ -350,6 +357,7 @@ body.dark .sync{background:var(--gold); color:var(--navy)}
   </div>
 </div>
 
+<input type="file" id="photoFile" accept="image/*" class="hide">
 <div id="sync" class="sync hide">Сохраняем…</div>
 <div id="modal"></div>
 
@@ -362,11 +370,11 @@ body.dark .sync{background:var(--gold); color:var(--navy)}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-15-4';
+const SITE_BUILD = '2026-09-16';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
-const NEED_VERSION = '2026-09-14-3';
+const NEED_VERSION = '2026-09-16';
 
 const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycby8pKX61ElEv1d5koPQC3_ErK9aYHmlS24UqFCFwZtWo5e8y-TmdJSs1Rk4ipOBTz76/exec';
 
@@ -495,6 +503,124 @@ function reindex(){
 /* Занятие считается проведённым, если в этот день есть хотя бы одна отметка. */
 const wasHeld = ds => !!S.held[ds];
 const markOf = (ds, uid) => S.marksIdx[ds + '|' + uid] || null;
+
+/* ================= фотографии =================
+   Картинки лежат в таблице и приходят отдельным запросом, поэтому загрузку
+   не тормозят. В браузере храним копию, чтобы не качать повторно. */
+const PHOTO_KEY = id => 'attPhoto:' + id;
+const photoCache = {};          // id → dataURL за текущий сеанс
+let photoQueue = [], photoTimer = null, photoBusy = false;
+
+function photoOf(id){
+  if(photoCache[id] !== undefined) return photoCache[id];
+  const saved = LS.get(PHOTO_KEY(id));
+  if(saved && saved.t === (S.photoMap || {})[id]){
+    photoCache[id] = saved.d;
+    return saved.d;
+  }
+  return null;
+}
+
+function needPhoto(id){
+  if(!(S.photoMap || {})[id] || photoOf(id) !== null) return;
+  if(photoQueue.indexOf(id) < 0) photoQueue.push(id);
+  clearTimeout(photoTimer);
+  photoTimer = setTimeout(loadPhotos, 120);
+}
+
+async function loadPhotos(){
+  if(photoBusy || !photoQueue.length || !S.token) return;
+  photoBusy = true;
+  const batch = photoQueue.splice(0, 6);
+  try {
+    const got = await api('photos', [S.token, batch]);
+    batch.forEach(id => {
+      const d = got[id] || '';
+      photoCache[id] = d;
+      LS.set(PHOTO_KEY(id), { t: (S.photoMap || {})[id], d: d });
+    });
+    render();
+  } catch(e){
+    batch.forEach(id => { photoCache[id] = ''; });    // не долбим сервер по кругу
+  } finally {
+    photoBusy = false;
+    if(photoQueue.length) setTimeout(loadPhotos, 60);
+  }
+}
+
+const initials = name => String(name || '').trim().split(/\s+/).slice(0,2)
+  .map(w => w.charAt(0)).join('');
+
+/* Кружок с фотографией или инициалами. */
+function avatar(p, size){
+  const cls = 'ava' + (size ? ' ' + size : '');
+  if(!p) return '<span class="' + cls + '"></span>';
+  const d = photoOf(p.id);
+  if(d) return '<img class="' + cls + '" src="' + d + '" alt="' + esc(p.name) + '">';
+  if((S.photoMap || {})[p.id]) needPhoto(p.id);
+  return '<span class="' + cls + '">' + esc(initials(p.name)) + '</span>';
+}
+
+/* Уменьшаем фотографию прямо в браузере: квадрат по центру, до 256 точек. */
+function resizePhoto(file, side, quality){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = c.height = side;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, side, side);
+      const s = Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, side, side);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Не удалось открыть файл.')); };
+    img.src = url;
+  });
+}
+
+/* Отправляем частями: за один запрос Apps Script принимает около 8 КБ. */
+async function uploadPhoto(id, dataUrl){
+  const CH = 5800;
+  const total = Math.ceil(dataUrl.length / CH);
+  inFlight++; syncBadge();
+  try {
+    for(let i = 0; i < total; i++){
+      await api('photoChunk', [S.token, id, i, total, dataUrl.slice(i * CH, (i + 1) * CH)]);
+      const el = document.getElementById('sync');
+      if(el) el.textContent = 'Отправляем фото: ' + (i + 1) + ' из ' + total;
+    }
+    S.photoMap = S.photoMap || {};
+    S.photoMap[id] = String(Date.now());
+    photoCache[id] = dataUrl;
+    LS.set(PHOTO_KEY(id), { t: S.photoMap[id], d: dataUrl });
+    say('Фото сохранено', 'ok');
+  } finally {
+    inFlight--; syncBadge();
+    const el = document.getElementById('sync');
+    if(el) el.textContent = 'Сохраняем…';
+    render();
+  }
+}
+
+document.getElementById('photoFile').addEventListener('change', async ev => {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if(!file || !S.photoFor) return;
+  const id = S.photoFor;
+  try {
+    let data = await resizePhoto(file, 256, 0.72);
+    if(data.length > 44000) data = await resizePhoto(file, 224, 0.62);
+    if(data.length > 44000) data = await resizePhoto(file, 180, 0.55);
+    if(data.length > 52000) throw new Error('Фотография слишком тяжёлая, возьмите другую.');
+    await uploadPhoto(id, data);
+  } catch(e){
+    say(e.message || 'Не получилось загрузить фото.', 'err');
+  }
+});
 
 /* ================= дни рождения ================= */
 function plural(n, one, few, many){
@@ -894,6 +1020,7 @@ function apply(st, fromCache){
   S.topics = st.topics || [];
   S.birthdays = st.birthdays || [];      // ученику присылают дни рождения товарищей
   S.clubAwards = st.clubAwards || [];    // и общую сводку наград кружка
+  S.photoMap = st.photoMap || {};        // у кого есть фотография и когда менялась
   S.school = st.school || [];            // достижения школы по командам и годам
   S.version = st.version || '';
   S.stats = st.stats || null;
@@ -943,11 +1070,11 @@ function versionWarning(){
   }
   if(!v && !versionKnown) return '';  // ответа ещё нет
   if(!v) return '<div class="msg warn">Серверный код устарел (в нём нет даже метки версии). ' +
-    'Обновите Code.gs в Apps Script и выпустите новую версию развёртывания — иначе дни рождения, ' +
-    'календарь и сводка достижений работать не будут. <span class="small">(сборка сайта ' +
-    SITE_BUILD + ')</span></div>';
+    'Обновите Code.gs в Apps Script и выпустите новую версию развёртывания, иначе часть ' +
+    'возможностей не заработает. <span class="small">(сборка сайта ' + SITE_BUILD + ')</span></div>';
   if(v < NEED_VERSION) return '<div class="msg warn">Серверный код старее сайта: ' + esc(v) +
-    ', нужен ' + NEED_VERSION + '. Обновите Code.gs в Apps Script и выпустите новую версию развёртывания.</div>';
+    ', нужен ' + NEED_VERSION + '. Обновите Code.gs в Apps Script и выпустите новую версию ' +
+    'развёртывания — тогда заработают фотографии учеников.</div>';
   return '';
 }
 
@@ -994,8 +1121,8 @@ function viewDay(){
       ? '<input class="in hin" type="number" min="0" step="0.5" max="' + plan + '" value="' + nf(m.h) +
         '" data-act="hours" data-id="' + p.id + '" title="Сколько часов был">'
       : '';
-    return '<li><div class="pname">' + esc(p.name) +
-      '<i>' + esc(who(p)) + (m && m.n ? ' · ' + esc(m.n) : '') + '</i></div>' +
+    return '<li><div class="pname avarow">' + avatar(p) + '<span>' + esc(p.name) +
+      '<i>' + esc(who(p)) + (m && m.n ? ' · ' + esc(m.n) : '') + '</i></span></div>' +
       '<div class="seg">' + seg + '</div>' + hours +
       (cur ? '<button class="btn sm" data-act="clear" data-id="' + p.id + '" title="Снять отметку">✕</button>' : '') +
       '</li>';
@@ -1236,8 +1363,9 @@ function viewPeople(){
   const body = list.map(p => {
     const st = statsFor(p.id, S.from, S.to);
     return '<tr>' +
-      '<td><a href="#" data-act="open-student" data-id="' + p.id + '">' + esc(p.name) + '</a>' +
-        (p.active ? '' : ' <span class="chip">архив</span>') + '</td>' +
+      '<td><span class="avarow">' + avatar(p, 'sm') +
+        '<a href="#" data-act="open-student" data-id="' + p.id + '">' + esc(p.name) + '</a>' +
+        (p.active ? '' : ' <span class="chip">архив</span>') + '</span></td>' +
       '<td>' + esc(p.cls) + '</td>' +
       '<td class="opt">' + (p.team ? '<span class="chip">' + esc(p.team) + '</span>' : '') + '</td>' +
       '<td class="opt">' + esc(p.category) + '</td>' +
@@ -1292,9 +1420,16 @@ function viewStudentCard(id){
   const aw = S.awards.filter(a => a.u === id).sort((a,b) => (b.date||'').localeCompare(a.date||''));
   const tp = S.topics.filter(t => t.u === id);
 
-  return '<div class="head"><h2>' + esc(p.name) +
-      (who(p) ? ' <span class="muted small">' + esc(who(p)) +
-        (p.teamRole ? ' · ' + (TEAM_ROLES[p.teamRole] || p.teamRole) : '') + '</span>' : '') + '</h2>' +
+  return '<div class="head"><div class="avarow">' + avatar(p, 'big') +
+      '<div><h2 style="margin:0">' + esc(p.name) + '</h2>' +
+      (who(p) ? '<div class="muted small">' + esc(who(p)) +
+        (p.teamRole ? ' · ' + (TEAM_ROLES[p.teamRole] || p.teamRole) : '') + '</div>' : '') +
+      (isStaff() ? '<div class="row" style="gap:6px;margin-top:8px">' +
+        '<button class="btn sm" data-act="photo-pick" data-id="' + p.id + '">' +
+          (photoOf(p.id) || (S.photoMap||{})[p.id] ? 'Заменить фото' : 'Добавить фото') + '</button>' +
+        ((S.photoMap||{})[p.id] ? '<button class="btn sm danger" data-act="photo-del" data-id="' +
+          p.id + '">Убрать</button>' : '') + '</div>' : '') +
+      '</div></div>' +
       '<button class="btn sm" data-act="back-people">← К списку</button></div>' +
 
     '<div class="cards">' +
@@ -1945,6 +2080,7 @@ function viewSettings(){
           '<tr><td>Записей о наградах</td><td>' + S.stats.awards + '</td></tr>' +
           '<tr><td>Соревнований в календаре</td><td>' + S.stats.competitions + '</td></tr>' +
           '<tr><td>Пунктов годового плана</td><td>' + S.stats.plan + '</td></tr>' +
+          '<tr><td>Фотографий учеников</td><td>' + (S.stats.photos || 0) + '</td></tr>' +
           '<tr><td>Достижений школы</td><td>' + (S.stats.school || 0) +
             (!S.stats.school ? ' <span class="chip coral">запустите importSchoolAwards</span>' : '') + '</td></tr>' : '') +
       '</tbody></table></div>' +
@@ -2279,6 +2415,23 @@ async function act(a, el, ev){
   case 'change-pin': {
     const r = await call('changePin', [S.token, val('pinOld'), val('pinNew')], 'Код изменён');
     if(r.ok){ document.getElementById('pinOld').value = ''; document.getElementById('pinNew').value = ''; }
+    break;
+  }
+
+  case 'photo-pick':
+    S.photoFor = el.dataset.id;
+    document.getElementById('photoFile').click();
+    break;
+  case 'photo-del': {
+    const p = personById(el.dataset.id);
+    if(!confirm('Убрать фотографию «' + (p ? p.name : '') + '»?')) return;
+    const r = await call('deletePhoto', [S.token, el.dataset.id], 'Фото убрано');
+    if(r.ok){
+      delete (S.photoMap || {})[el.dataset.id];
+      delete photoCache[el.dataset.id];
+      LS.del(PHOTO_KEY(el.dataset.id));
+      render();
+    }
     break;
   }
 

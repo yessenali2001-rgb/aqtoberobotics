@@ -29,7 +29,7 @@
  *  Установка описана в attendance/README.md
  *************************************************************/
 
-var VERSION = '2026-09-15';         // метка версии кода: видна в ответе сервера
+var VERSION = '2026-09-16';         // метка версии кода: видна в ответе сервера
 var SHEET_ID = '';                    // пусто = скрипт привязан к таблице
 var FIRST_ADMIN_NAME = 'Администратор';
 var SESSION_DAYS = 90;                // сколько дней держится вход
@@ -44,7 +44,8 @@ var SHEETS = {
   sessions: ['token','personId','createdAt','expiresAt'],
   awards:   ['id','studentId','date','title','subject','level','result','note','updatedAt','updatedBy'],
   topics:   ['id','studentId','subject','title','status','due','note','updatedAt','updatedBy'],
-  school:   ['id','year','category','event','team','award','result','note','updatedAt','updatedBy']
+  school:   ['id','year','category','event','team','award','result','note','updatedAt','updatedBy'],
+  photos:   ['studentId','data','buf','updatedAt','updatedBy']
 };
 
 var STATUSES = ['p','l','e','a'];     // был / опоздал / уважительная / пропуск
@@ -354,6 +355,7 @@ function stateFor_(person) {
         .map(function (x) { return { name: x.name, birth: x.birth, team: x.team }; }),
       clubAwards: clubAwards_(people),
       school: rows_('school').map(schoolPub_),
+      photoMap: photoMap_(),
       version: VERSION
     };
   }
@@ -364,11 +366,13 @@ function stateFor_(person) {
     awards: awardsPub_(rows_('awards')),
     topics: topicsPub_(rows_('topics')),
     school: rows_('school').map(schoolPub_),
+    photoMap: photoMap_(),
     version: VERSION,
     stats: { students: people.filter(function (x) { return x.role === 'student' && x.active; }).length,
              withBirth: withBirth, awards: rows_('awards').length,
              competitions: settings.competitions.length, plan: settings.plan.length,
-             school: rows_('school').length }
+             school: rows_('school').length,
+             photos: Object.keys(photoMap_()).length }
   };
 }
 
@@ -564,6 +568,9 @@ API.deletePerson = function (token, id) {
   rows_('marks').slice().reverse().forEach(function (m) {
     if (String(m.studentId) === String(id)) drop_('marks', m._row);
   });
+  rows_('photos').slice().reverse().forEach(function (f) {
+    if (String(f.studentId) === String(id)) drop_('photos', f._row);
+  });
   rows_('awards').slice().reverse().forEach(function (a) {
     if (String(a.studentId) === String(id)) drop_('awards', a._row);
   });
@@ -577,6 +584,75 @@ API.deletePerson = function (token, id) {
   dropBootCache_();
   return true;
 };
+
+/* ---- фотографии учеников ----
+   Картинка уменьшается прямо в браузере и приходит частями: за один запрос
+   Apps Script принимает около 8 КБ. Храним в таблице, наружу не отдаём —
+   только тем, кто вошёл в систему. */
+
+var PHOTO_MAX = 60000;   // предел на одну ячейку таблицы
+
+function findPhoto_(studentId) {
+  var hit = null;
+  rows_('photos').forEach(function (r) { if (String(r.studentId) === String(studentId)) hit = r; });
+  return hit;
+}
+
+/** Кусок фотографии. part — с нуля, total — сколько всего кусков. */
+API.photoChunk = function (token, studentId, part, total, chunk) {
+  var p = auth_(token); requireStaff_(p);
+  checkStudent_(studentId);
+  part = num_(part, 0); total = Math.max(1, num_(total, 1));
+  chunk = String(chunk || '');
+
+  var hit = findPhoto_(studentId);
+  var buf = (part === 0 || !hit) ? chunk : String(hit.buf || '') + chunk;
+  if (buf.length > PHOTO_MAX) throw new Error('Фотография слишком большая.');
+
+  var last = (part + 1 >= total);
+  var patch = last
+    ? { data: buf, buf: '', updatedAt: nowIso_(), updatedBy: String(p.name) }
+    : { buf: buf, updatedAt: nowIso_(), updatedBy: String(p.name) };
+
+  if (hit) update_('photos', hit._row, patch);
+  else {
+    patch.studentId = String(studentId);
+    if (!patch.data) patch.data = '';
+    append_('photos', patch);
+  }
+  return { got: part + 1, of: total, done: last, size: buf.length };
+};
+
+/** Сами картинки — отдельным запросом, чтобы не утяжелять загрузку. */
+API.photos = function (token, ids) {
+  auth_(token);
+  var want = {};
+  (ids || []).forEach(function (x) { want[String(x)] = true; });
+  var out = {};
+  rows_('photos').forEach(function (r) {
+    var id = String(r.studentId);
+    if (!want[id]) return;
+    var d = String(r.data || '');
+    if (d) out[id] = d;
+  });
+  return out;
+};
+
+API.deletePhoto = function (token, studentId) {
+  var p = auth_(token); requireStaff_(p);
+  var hit = findPhoto_(studentId);
+  if (hit) drop_('photos', hit._row);
+  return true;
+};
+
+/** Кто с фотографией и когда она обновлялась — чтобы браузер знал, что перечитать. */
+function photoMap_() {
+  var out = {};
+  rows_('photos').forEach(function (r) {
+    if (String(r.data || '')) out[String(r.studentId)] = dstr_(r.updatedAt) || '1';
+  });
+  return out;
+}
 
 /* ---- достижения школы (командные, по годам) ---- */
 
