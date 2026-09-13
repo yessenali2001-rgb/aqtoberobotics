@@ -38,7 +38,7 @@ var LOCK_MINUTES = 15;                // на сколько блокирует�
 
 var SHEETS = {
   people:   ['id','role','name','pinHash','salt','active','since','createdAt','failCount','lockUntil','note',
-             'cls','team','category','teamRole'],
+             'cls','team','category','teamRole','birth'],
   marks:    ['id','date','studentId','status','hours','note','updatedAt','updatedBy'],
   settings: ['key','value'],
   sessions: ['token','personId','createdAt','expiresAt'],
@@ -76,6 +76,7 @@ function sheet_(name) {
     sh.setFrozenRows(1);
     if (name === 'marks') sh.getRange('B:B').setNumberFormat('@');
     if (name === 'people') sh.getRange('G:H').setNumberFormat('@');
+    if (name === 'people') sh.getRange('P:P').setNumberFormat('@');
     HDR_CHECKED[name] = true;
     _sheet[name] = sh;
     return sh;
@@ -188,6 +189,10 @@ function readSettings_() {
   s.schedule = s.schedule.map(function (h) { return Math.max(0, num_(h, 0)); });
   if (!Array.isArray(s.holidays)) s.holidays = [];
   if (!Array.isArray(s.competitions)) s.competitions = [];
+  s.competitions = s.competitions.map(function (c, i) {
+    if (!c.id) c.id = 'c' + i + '-' + String(c.title || '').replace(/[^0-9A-Za-zА-Яа-я]/g, '').slice(0, 12);
+    return c;
+  });
   if (!Array.isArray(s.plan)) s.plan = [];
   return s;
 }
@@ -208,7 +213,8 @@ function personPub_(p) {
     active: String(p.active) !== '0' && p.active !== false,
     since: dstr_(p.since), createdAt: dstr_(p.createdAt), note: String(p.note || ''),
     cls: String(p.cls || ''), team: String(p.team || ''),
-    category: String(p.category || ''), teamRole: String(p.teamRole || '')
+    category: String(p.category || ''), teamRole: String(p.teamRole || ''),
+    birth: dstr_(p.birth)
   };
 }
 
@@ -230,7 +236,8 @@ function createPerson_(role, name, pin, since, extra) {
     active: extra.active === 0 ? 0 : 1, since: since || today_(), createdAt: today_(),
     failCount: 0, lockUntil: '', note: String(extra.note || ''),
     cls: String(extra.cls || ''), team: String(extra.team || ''),
-    category: String(extra.category || ''), teamRole: String(extra.teamRole || '')
+    category: String(extra.category || ''), teamRole: String(extra.teamRole || ''),
+    birth: dstr_(extra.birth)
   };
   append_('people', row);
   dropBootCache_();
@@ -316,7 +323,9 @@ function stateFor_(person) {
       people: people.filter(function (p) { return p.id === me.id; }),
       marks: marksPub_(rows_('marks'), me.id),
       awards: awardsPub_(rows_('awards'), me.id),
-      topics: topicsPub_(rows_('topics'), me.id)
+      topics: topicsPub_(rows_('topics'), me.id),
+      birthdays: people.filter(function (x) { return x.role === 'student' && x.active && x.birth; })
+        .map(function (x) { return { name: x.name, birth: x.birth, team: x.team }; })
     };
   }
   return {
@@ -481,6 +490,7 @@ API.savePerson = function (token, id, patch) {
   }
   if (patch.since !== undefined) out.since = dstr_(patch.since);
   if (patch.note !== undefined) out.note = String(patch.note);
+  if (patch.birth !== undefined) out.birth = dstr_(patch.birth);
   ['cls', 'team', 'category', 'teamRole'].forEach(function (k) {
     if (patch[k] !== undefined) out[k] = String(patch[k]).trim();
   });
@@ -530,6 +540,63 @@ API.deletePerson = function (token, id) {
   drop_('people', t._row);
   dropBootCache_();
   return true;
+};
+
+/* ---- календарь соревнований ---- */
+
+var COMP_STATUS = ['plan', 'prep', 'done', 'skip'];
+
+function compPub_(c) {
+  c = c || {};
+  return {
+    id: String(c.id || ''),
+    title: String(c.title || '').trim(),
+    when: String(c.when || '').trim(),
+    term: String(c.term || '').trim(),
+    dateFrom: dstr_(c.dateFrom),
+    dateTo: dstr_(c.dateTo),
+    category: String(c.category || '').trim(),
+    place: String(c.place || '').trim(),
+    status: COMP_STATUS.indexOf(c.status) >= 0 ? c.status : '',
+    note: String(c.note || ''),
+    members: (c.members || []).map(String)
+  };
+}
+
+/** Добавить или изменить соревнование. */
+API.saveCompetition = function (token, comp) {
+  var p = auth_(token); requireStaff_(p);
+  var one = compPub_(comp);
+  if (!one.title) throw new Error('Укажите название соревнования.');
+  var list = readSettings_().competitions.map(compPub_);
+  var found = false;
+  if (one.id) {
+    list = list.map(function (c) {
+      if (c.id && c.id === one.id) { found = true; return one; }
+      return c;
+    });
+  }
+  if (!found) {
+    if (!one.id) one.id = newId_('c');
+    list.push(one);
+  }
+  writeSetting_('competitions', list);
+  return list;
+};
+
+API.deleteCompetition = function (token, id) {
+  var p = auth_(token); requireStaff_(p);
+  var list = readSettings_().competitions.map(compPub_).filter(function (c) { return c.id !== String(id); });
+  writeSetting_('competitions', list);
+  return list;
+};
+
+/** Результаты целого соревнования: по записи на каждого участника. */
+API.saveAwards = function (token, awards) {
+  var p = auth_(token); requireStaff_(p);
+  var out = [];
+  (awards || []).forEach(function (a) { out.push(API.saveAward(token, a)); });
+  return out;
 };
 
 /* ---- олимпиады и достижения ---- */
@@ -651,10 +718,7 @@ API.saveSettings = function (token, patch) {
     writeSetting_('schedule', sc.map(function (h) { return Math.max(0, num_(h, 0)); }));
   }
   if (patch.competitions !== undefined) {
-    writeSetting_('competitions', (patch.competitions || []).map(function (c) {
-      return { title: String(c.title || ''), when: String(c.when || ''),
-               term: String(c.term || ''), status: String(c.status || '') };
-    }).filter(function (c) { return c.title; }));
+    writeSetting_('competitions', (patch.competitions || []).map(compPub_).filter(function (c) { return c.title; }));
   }
   if (patch.plan !== undefined) {
     writeSetting_('plan', (patch.plan || []).map(function (x) {
@@ -741,6 +805,62 @@ function setup() {
           '\n\nЗапишите код — он больше нигде не показывается.';
   }
   return tell_(msg);
+}
+
+/*************************************************************
+ *  Разовый импорт дат рождения из таблицы кружка.
+ *  Запустите функцию importBirthdays() один раз.
+ *  Имена сверяются без учёта ә/ғ/қ/ң/ө/ұ/ү/і, поэтому
+ *  «Амангос» и «Аманғос» считаются одним человеком.
+ *************************************************************/
+var BIRTHDAYS = [
+  ['Аманғос Омарәлім', '2012-03-24'],
+  ['Базарбай Өміржан', '2011-12-15'],
+  ['Жандосұлы Жансерік', '2012-02-20'],
+  ['Хажиолиев Төлеген', '2012-02-17'],
+  ['Ғабит Абубакр', '2012-01-21'],
+  ['Али Ахмет', '2011-08-02'],
+  ['Еркін Диас', '2011-04-25'],
+  ['Мұрзақан Мадияр', '2011-07-13'],
+  ['Нығмет Әбдірасул', '2011-06-20'],
+  ['Нурмухамедов Асмир', '2010-09-27'],
+  ['Бисенгалиев Ислам', '2011-07-17'],
+  ['Таяу Сүлеймен', '2011-04-18'],
+  ['Тулегенов Расул', '2010-11-12'],
+  ['Қазанбаев Сүлеймен', '2009-12-16'],
+  ['Теңелғали Бекарыстан', '2009-08-27'],
+  ['Давлетов Есентай', '2010-02-15'],
+  ['Қыдырбай Нұрислам', '2009-11-01'],
+  ['Нұрмұхан Нұрали', '2009-08-21'],
+  ['Барлық Исламбек', '2009-10-04'],
+  ['Суйесинов Алмаз', '2010-04-03'],
+];
+
+function plainName_(s) {
+  s = String(s || '').toLowerCase();
+  var from = 'әғқңөұүһіё', to = 'агкноуухие';
+  var out = '';
+  for (var i = 0; i < s.length; i++) {
+    var j = from.indexOf(s.charAt(i));
+    out += j >= 0 ? to.charAt(j) : s.charAt(i);
+  }
+  return out.replace(/\s+/g, ' ').trim();
+}
+
+function importBirthdays() {
+  var byName = {};
+  rows_('people').forEach(function (p) {
+    if (String(p.role) === 'student') byName[plainName_(p.name)] = p;
+  });
+  var done = 0, missed = [];
+  BIRTHDAYS.forEach(function (row) {
+    var p = byName[plainName_(row[0])];
+    if (!p) { missed.push(row[0]); return; }
+    update_('people', p._row, { birth: row[1] });
+    done++;
+  });
+  return tell_('Даты рождения проставлены: ' + done +
+    (missed.length ? '\nНе нашлись: ' + missed.join(', ') : ''));
 }
 
 /** Сброс кода администратора, если он потерян. */

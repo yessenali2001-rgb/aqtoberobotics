@@ -103,6 +103,17 @@ body.dark .top{background:#08081A}
 .msg.err{background:rgba(255,103,77,.12); color:var(--coral); border-color:rgba(255,103,77,.35)}
 .msg.ok{background:rgba(100,144,232,.12); color:var(--blue); border-color:rgba(100,144,232,.35)}
 .msg.warn{background:rgba(201,178,145,.18); border-color:var(--gold)}
+.msg.bday{background:rgba(201,178,145,.22); border-color:var(--gold); font-size:15px}
+.msg.bdaysoon{background:var(--sunk); border-color:var(--line); color:var(--muted)}
+.comp{border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:10px; background:var(--sunk)}
+.comp.soon{border-color:var(--gold); background:rgba(201,178,145,.12)}
+.comp h4{margin:0 0 4px; font-size:16px; font-weight:650}
+.comp .when{font-size:13px; color:var(--muted)}
+.comp .who{margin-top:10px; display:flex; gap:6px; flex-wrap:wrap}
+.cnt{font-weight:650; white-space:nowrap}
+.pick{display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:6px; max-height:50vh; overflow-y:auto;
+      border:1px solid var(--line); border-radius:10px; padding:10px}
+.pick label{display:flex; gap:8px; align-items:center; font-size:14px; padding:3px 0}
 
 .head{display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px}
 .head h2{font-size:20px}
@@ -277,6 +288,7 @@ button.cell{cursor:pointer}
   </div>
   <div class="wrap">
     <div id="banner"></div>
+    <div id="bday"></div>
     <div class="tabs" id="tabs"></div>
     <div id="view"></div>
   </div>
@@ -343,7 +355,7 @@ const nf = n => (Math.round(n*10)/10).toString().replace('.', ',');
 /* ================= состояние ================= */
 const S = {
   api: '', token: '', me: null, settings: null,
-  people: [], marks: [], awards: [], topics: [],
+  people: [], marks: [], awards: [], topics: [], birthdays: [],
   marksIdx: {}, tab: '', day: todayStr(), month: todayStr().slice(0,7),
   from: '', to: '', sort: 'miss', openStudent: '', busy: false,
   fTeam: '', fCat: '', fRole: '', q: ''
@@ -423,6 +435,89 @@ function reindex(){
 /* Занятие считается проведённым, если в этот день есть хотя бы одна отметка. */
 const wasHeld = ds => !!S.held[ds];
 const markOf = (ds, uid) => S.marksIdx[ds + '|' + uid] || null;
+
+/* ================= дни рождения ================= */
+function plural(n, one, few, many){
+  const a = n % 10, b = n % 100;
+  if(a === 1 && b !== 11) return one;
+  if(a >= 2 && a <= 4 && (b < 12 || b > 14)) return few;
+  return many;
+}
+const yearsWord = n => n + ' ' + plural(n, 'год', 'года', 'лет');
+const daysWord = n => n === 0 ? 'сегодня' : n === 1 ? 'завтра'
+  : 'через ' + n + ' ' + plural(n, 'день', 'дня', 'дней');
+const dayMonth = ds => { const d = parseD(ds); return d.getDate() + ' ' + MON_GEN[d.getMonth()]; };
+
+function bdayInfo(person){
+  const b = person && person.birth;
+  if(!b || !/^\d{4}-\d{2}-\d{2}$/.test(b)) return null;
+  const bd = parseD(b);
+  const now = new Date(), t = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let next = new Date(t.getFullYear(), bd.getMonth(), bd.getDate());
+  if(next < t) next = new Date(t.getFullYear() + 1, bd.getMonth(), bd.getDate());
+  return { date: fmt(next), days: Math.round((next - t) / 864e5),
+           age: next.getFullYear() - bd.getFullYear(), month: bd.getMonth(), day: bd.getDate() };
+}
+
+/* у педагога — все ученики, у ученика — присланный список товарищей */
+const bdayPeople = () => isStaff() ? students() : (S.birthdays || []);
+
+function bdayList(){
+  return bdayPeople().map(p => ({ p, b: bdayInfo(p) }))
+    .filter(x => x.b).sort((a, b) => a.b.days - b.b.days);
+}
+
+/* Полоса, которая видна на любой вкладке. */
+function bdayBanner(){
+  const list = bdayList();
+  if(!list.length) return '';
+  const today = list.filter(x => x.b.days === 0);
+  if(today.length) return '<div class="msg bday">🎂 Сегодня день рождения: ' +
+    today.map(x => '<b>' + esc(x.p.name) + '</b> — ' + yearsWord(x.b.age)).join(', ') +
+    '. Не забудьте поздравить!</div>';
+  const n = list[0];
+  return '<div class="msg bdaysoon">🎂 Ближайший день рождения: <b>' + esc(n.p.name) + '</b>, ' +
+    dayMonth(n.b.date) + ' — ' + daysWord(n.b.days) + ' (' + yearsWord(n.b.age) + ')</div>';
+}
+
+/* ================= календарь соревнований ================= */
+const COMP_STATUS = { plan:'Планируем', prep:'Готовимся', done:'Прошло', skip:'Не едем' };
+
+/* Даты в таблице кружка записаны словами: «10-11 ноябрь», «December 12-13».
+   Разбираем их, чтобы считать обратный отсчёт, не трогая исходный текст. */
+const MONTH_WORDS = [
+  ['январ','янв','january','jan','қаңтар'], ['феврал','фев','february','feb','ақпан'],
+  ['март','мар','march','наурыз'],          ['апрел','апр','april','apr','сәуір'],
+  ['май','мая','may','мамыр'],              ['июн','june','jun','маусым'],
+  ['июл','july','jul','шілде'],             ['август','авг','august','aug','тамыз'],
+  ['сентябр','сен','september','sep','қыркүйек'], ['октябр','окт','october','oct','қазан'],
+  ['ноябр','ноя','november','nov','қараша'],['декабр','дек','december','dec','желтоқсан']
+];
+
+function parseWhen(text){
+  const t = String(text || '').toLowerCase();
+  if(!t) return '';
+  let month = -1, at = 1e9;
+  MONTH_WORDS.forEach((words, i) => {
+    words.forEach(w => { const k = t.indexOf(w); if(k >= 0 && k < at){ at = k; month = i; } });
+  });
+  if(month < 0) return '';
+  const day = (t.match(/\d{1,2}/) || [])[0];
+  const ys = (S.settings && S.settings.yearStart) ? Number(S.settings.yearStart.slice(0,4)) : new Date().getFullYear();
+  const year = month >= 7 ? ys : ys + 1;          // с августа — первый год, с января — второй
+  return year + '-' + pad(month + 1) + '-' + pad(day ? Number(day) : 1);
+}
+
+const compDate = c => c.dateFrom || parseWhen(c.when);
+function compDays(c){
+  const d = compDate(c);
+  if(!d) return null;
+  return Math.round((parseD(d) - parseD(todayStr())) / 864e5);
+}
+function compList(){
+  return (S.settings.competitions || []).slice().sort((a,b) =>
+    (compDate(a) || '9999').localeCompare(compDate(b) || '9999'));
+}
 
 /* ================= статистика ================= */
 function statsFor(uid, from, to){
@@ -646,6 +741,7 @@ function apply(st){
   S.marks = st.marks || [];
   S.awards = st.awards || [];
   S.topics = st.topics || [];
+  S.birthdays = st.birthdays || [];      // ученику присылают дни рождения товарищей
   reindex();
   LS.set(K_CACHE, st);          // чтобы в следующий раз открылось мгновенно
   if(!S.from){
@@ -670,10 +766,12 @@ async function refresh(){
 function tabList(){
   if(isStaff()) return [
     ['day','Журнал'], ['grid','Таблица'], ['report','Анализ года'],
-    ['people','Ученики'], ['extra','Олимпиады и темы'], ['plan','План года'],
+    ['people','Ученики'], ['extra','Олимпиады и темы'],
+    ['calendar','Календарь'], ['plan','План года'],
     ...(isAdmin() ? [['settings','Настройки']] : [])
   ];
-  return [['my','Мои занятия'], ['myextra','Олимпиады и темы'], ['plan','План года']];
+  return [['my','Мои занятия'], ['myextra','Олимпиады и темы'],
+          ['calendar','Календарь'], ['plan','План года']];
 }
 
 function render(){
@@ -681,10 +779,12 @@ function render(){
   const tabs = tabList();
   document.getElementById('tabs').innerHTML = tabs.map(([k,label]) =>
     '<button class="tab' + (k === S.tab ? ' on' : '') + '" data-tab="' + k + '">' + label + '</button>').join('');
+  document.getElementById('bday').innerHTML = bdayBanner();
   const v = document.getElementById('view');
   const fn = {
     day: viewDay, grid: viewGrid, report: viewReport, people: viewPeople,
-    extra: viewExtra, plan: viewPlan, settings: viewSettings, my: viewMy, myextra: viewMyExtra
+    extra: viewExtra, calendar: viewCalendar, plan: viewPlan,
+    settings: viewSettings, my: viewMy, myextra: viewMyExtra
   }[S.tab];
   v.innerHTML = fn ? fn() : '';
   window.scrollTo({ top:0 });
@@ -1008,6 +1108,7 @@ function viewStudentCard(id){
   const p = personById(id);
   if(!p){ S.openStudent = ''; return viewPeople(); }
   const st = statsFor(id, S.from, S.to);
+  const bi = bdayInfo(p);
   const aw = S.awards.filter(a => a.u === id).sort((a,b) => (b.date||'').localeCompare(a.date||''));
   const tp = S.topics.filter(t => t.u === id);
 
@@ -1025,6 +1126,11 @@ function viewStudentCard(id){
       tile(aw.length, '', 'Олимпиад') +
     '</div>' +
 
+    (bi ? '<div class="msg ' + (bi.days === 0 ? 'bday' : 'bdaysoon') + '">🎂 ' +
+      (bi.days === 0 ? 'Сегодня день рождения — ' + yearsWord(bi.age) + '!'
+                     : 'День рождения ' + dayMonth(bi.date) + ' — ' + daysWord(bi.days) +
+                       ', исполнится ' + yearsWord(bi.age)) + '</div>' : '') +
+
     (isStaff() ? '<div class="sect"><h3>Данные ученика</h3>' +
       '<datalist id="teamList">' + teams().map(t => '<option value="' + esc(t) + '">').join('') + '</datalist>' +
       '<datalist id="catList">' + cats().map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>' +
@@ -1036,6 +1142,7 @@ function viewStudentCard(id){
       '<div class="field" style="margin:0;width:170px"><label>Роль в команде</label><select class="in" id="edRole">' +
         '<option value="">—</option>' + Object.keys(TEAM_ROLES).map(k =>
           '<option value="' + k + '"' + (p.teamRole===k?' selected':'') + '>' + TEAM_ROLES[k] + '</option>').join('') + '</select></div>' +
+      '<div class="field" style="margin:0"><label>День рождения</label><input class="in" id="edBirth" type="date" value="' + (p.birth||'') + '"></div>' +
       '<div class="field" style="margin:0"><label>Зачислен с</label><input class="in" id="edSince" type="date" value="' + (p.since||'') + '"></div>' +
       '<div class="row" style="align-self:flex-end">' +
         '<button class="btn pri" data-act="save-person" data-id="' + id + '">Сохранить</button>' +
@@ -1181,7 +1288,6 @@ function viewExtra(){
 
     filterBar() +
     awardsMatrix() +
-    competitionsBlock() +
 
     '<div class="sect"><div class="head"><h3>Все записи об олимпиадах</h3>' +
       (isStaff() ? '<button class="btn sm pri" data-act="award-form">Добавить запись</button>' : '') + '</div>' +
@@ -1200,23 +1306,83 @@ function viewExtra(){
       moreNote(tpShown.length, S.topics.length) + '</div>';
 }
 
-function competitionsBlock(){
-  const list = S.settings.competitions || [];
-  const rows = list.map((c,i) =>
-    '<tr><td>' + esc(c.title) + '</td><td class="muted">' + esc(c.when) + '</td>' +
-    '<td class="muted small">' + esc(c.term) + '</td>' +
-    '<td>' + (c.status ? '<span class="chip blue">' + esc(c.status) + '</span>' : '') + '</td>' +
-    (isAdmin() ? '<td><button class="btn sm danger" data-act="comp-del" data-i="' + i + '">✕</button></td>' : '') +
-    '</tr>').join('');
-  return '<div class="sect"><h3>Календарь соревнований</h3>' +
-    (rows ? '<div class="scroll"><table><thead><tr><th>Соревнование</th><th>Когда</th><th>Четверть</th><th>Статус</th>' +
-            (isAdmin() ? '<th></th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
-          : '<p class="muted">Пока пусто.</p>') +
-    (isAdmin() ? '<div class="row" style="margin-top:12px">' +
-      '<input class="in grow" id="compTitle" placeholder="Название соревнования">' +
-      '<input class="in" style="width:150px" id="compWhen" placeholder="Когда">' +
-      '<input class="in" style="width:110px" id="compTerm" placeholder="Четверть">' +
-      '<button class="btn" data-act="comp-add">Добавить</button></div>' : '') + '</div>';
+function memberChips(c){
+  const ids = c.members || [];
+  if(!ids.length) return '<span class="muted small">состав не назначен</span>';
+  return ids.map(id => {
+    const p = personById(id);
+    return '<span class="chip">' + esc(p ? p.name : '—') + '</span>';
+  }).join('');
+}
+
+function compCard(c){
+  const days = compDays(c);
+  const soon = days !== null && days >= 0 && days <= 14 && c.status !== 'done' && c.status !== 'skip';
+  const when = [c.when, compDate(c) && !c.dateFrom ? '' : '', c.place].filter(Boolean).join(' · ');
+  return '<div class="comp' + (soon ? ' soon' : '') + '">' +
+    '<div class="row" style="justify-content:space-between;align-items:flex-start">' +
+      '<div><h4>' + esc(c.title) + '</h4><div class="when">' +
+        (when || 'дата не указана') +
+        (c.term ? ' · ' + esc(c.term) : '') +
+        (c.category ? ' · ' + esc(c.category) : '') + '</div></div>' +
+      '<div style="text-align:right">' +
+        (c.status ? '<span class="chip ' + (c.status==='done'?'done':c.status==='skip'?'':'gold') + '">' +
+          COMP_STATUS[c.status] + '</span><br>' : '') +
+        (days !== null && c.status !== 'done'
+          ? '<span class="cnt small ' + (soon ? '' : 'muted') + '">' +
+            (days < 0 ? 'прошло' : daysWord(days)) + '</span>'
+          : '') +
+      '</div></div>' +
+    (c.note ? '<p class="small muted" style="margin:8px 0 0">' + esc(c.note) + '</p>' : '') +
+    '<div class="who">' + memberChips(c) + '</div>' +
+    (isStaff()
+      ? '<div class="row" style="margin-top:12px;gap:6px">' +
+          '<button class="btn sm" data-act="comp-members" data-id="' + esc(c.id) + '">Состав</button>' +
+          '<button class="btn sm" data-act="comp-results" data-id="' + esc(c.id) + '">Записать результаты</button>' +
+          '<button class="btn sm" data-act="comp-form" data-id="' + esc(c.id) + '">Изменить</button>' +
+          '<button class="btn sm danger" data-act="comp-del" data-id="' + esc(c.id) + '">✕</button>' +
+        '</div>'
+      : (c.members || []).indexOf(S.me.id) >= 0
+        ? '<p class="small" style="margin:10px 0 0;color:var(--blue)">Вы в составе</p>' : '') +
+    '</div>';
+}
+
+function viewCalendar(){
+  const all = compList();
+  const past = all.filter(c => c.status === 'done' || (compDays(c) !== null && compDays(c) < 0));
+  const next = all.filter(c => past.indexOf(c) < 0);
+  const bdays = bdayList();
+
+  return '<div class="head"><h2>Календарь</h2>' +
+      (isStaff() ? '<button class="btn sm pri" data-act="comp-form">Добавить соревнование</button>' : '') + '</div>' +
+
+    '<div class="sect"><h3>Ближайшие соревнования</h3>' +
+      (next.length ? next.map(compCard).join('') : '<p class="muted">Пока ничего не запланировано.</p>') + '</div>' +
+
+    (past.length ? '<div class="sect"><details><summary class="muted small" style="cursor:pointer">' +
+      'Прошедшие соревнования (' + past.length + ')</summary><div style="margin-top:12px">' +
+      past.map(compCard).join('') + '</div></details></div>' : '') +
+
+    '<div class="sect"><h3>Дни рождения</h3>' +
+      (bdays.length
+        ? '<div class="scroll"><table><tbody>' + bdays.slice(0, 8).map(x =>
+            '<tr><td>' + (x.b.days === 0 ? '🎂 ' : '') + esc(x.p.name) + '</td>' +
+            '<td>' + (x.p.team ? '<span class="chip">' + esc(x.p.team) + '</span>' : '') + '</td>' +
+            '<td>' + dayMonth(x.b.date) + '</td>' +
+            '<td class="muted small">' + daysWord(x.b.days) + '</td>' +
+            '<td class="muted small">исполнится ' + yearsWord(x.b.age) + '</td></tr>').join('') +
+          '</tbody></table></div>' +
+          (bdays.length > 8
+            ? '<details style="margin-top:12px"><summary class="muted small" style="cursor:pointer">Весь список (' +
+              bdays.length + ')</summary><div class="scroll" style="margin-top:10px"><table><tbody>' +
+              bdays.slice().sort((a,b) => (a.b.month - b.b.month) || (a.b.day - b.b.day)).map(x =>
+                '<tr><td>' + esc(x.p.name) + '</td><td>' + dayMonth(x.b.date) + '</td>' +
+                '<td class="muted small">' + (x.p.birth || '') + '</td></tr>').join('') +
+              '</tbody></table></div></details>'
+            : '')
+        : '<p class="muted">Даты рождения ещё не заполнены. Их можно указать в карточке ученика' +
+          (isAdmin() ? ', либо перенести из таблицы кружка функцией importBirthdays() в Apps Script' : '') + '.</p>') +
+    '</div>';
 }
 
 function compDatalist(){
@@ -1254,6 +1420,73 @@ function viewPlan(){
       ? chips + '<div class="sect"><div class="scroll"><table><tbody>' + rows + '</tbody></table></div>' +
         (isStaff() ? '<p class="small muted" style="margin:10px 0 0">«Назначить» превращает пункт плана в тему для ученика, команды или всех сразу.</p>' : '') + '</div>'
       : '<div class="sect muted">План пока не загружен. Его можно перенести из таблицы кружка скриптом import-club-data.gs.</div>');
+}
+
+function compForm(id){
+  const c = id ? (S.settings.competitions || []).find(x => x.id === id) : null;
+  const o = (list, cur) => Object.keys(list).map(k =>
+    '<option value="' + k + '"' + (cur === k ? ' selected' : '') + '>' + list[k] + '</option>').join('');
+  modal('<h3>' + (c ? 'Изменить соревнование' : 'Новое соревнование') + '</h3>' +
+    '<div class="field"><label>Название</label><input class="in" id="cTitle" value="' + esc(c ? c.title : '') + '"></div>' +
+    '<div class="row">' +
+      '<div class="field grow"><label>Когда (как в плане кружка)</label>' +
+        '<input class="in" id="cWhen" placeholder="например: December 12-13" value="' + esc(c ? c.when : '') + '"></div>' +
+      '<div class="field"><label>Точная дата: с</label><input class="in" type="date" id="cFrom" value="' + (c ? c.dateFrom : '') + '"></div>' +
+      '<div class="field"><label>по</label><input class="in" type="date" id="cTo" value="' + (c ? c.dateTo : '') + '"></div>' +
+    '</div>' +
+    '<div class="row">' +
+      '<div class="field grow"><label>Место</label><input class="in" id="cPlace" value="' + esc(c ? c.place : '') + '"></div>' +
+      '<div class="field" style="width:120px"><label>Четверть</label><input class="in" id="cTerm" value="' + esc(c ? c.term : '') + '"></div>' +
+      '<div class="field" style="width:130px"><label>Категория</label><input class="in" id="cCat" list="catList" value="' + esc(c ? c.category : '') + '"></div>' +
+      '<div class="field" style="width:150px"><label>Статус</label><select class="in" id="cStatus">' +
+        '<option value="">—</option>' + o(COMP_STATUS, c ? c.status : '') + '</select></div>' +
+    '</div>' +
+    '<div class="field"><label>Примечание</label><input class="in" id="cNote" value="' + esc(c ? c.note : '') + '"></div>' +
+    '<datalist id="catList">' + cats().map(x => '<option value="' + esc(x) + '">').join('') + '</datalist>' +
+    '<button class="btn pri" data-act="comp-save" data-id="' + (id || '') + '">Сохранить</button>');
+}
+
+function membersForm(id){
+  const c = (S.settings.competitions || []).find(x => x.id === id);
+  if(!c) return;
+  const chosen = c.members || [];
+  modal('<h3>Состав: ' + esc(c.title) + '</h3>' +
+    '<p class="small muted">Отметьте, кто едет. Потом по этому списку запишете результаты.</p>' +
+    '<div class="pick">' + students().map(p =>
+      '<label><input type="checkbox" class="mchk" value="' + p.id + '"' +
+      (chosen.indexOf(p.id) >= 0 ? ' checked' : '') + '>' + esc(p.name) +
+      (p.team ? ' <span class="muted small">' + esc(p.team) + '</span>' : '') + '</label>').join('') + '</div>' +
+    '<div class="row" style="margin-top:12px">' +
+      '<button class="btn pri" data-act="comp-members-save" data-id="' + esc(id) + '">Сохранить состав</button>' +
+      '<span class="muted small">выбрано: <b id="mCount">' + chosen.length + '</b></span></div>');
+  document.querySelectorAll('.mchk').forEach(el => el.addEventListener('change', () => {
+    document.getElementById('mCount').textContent = document.querySelectorAll('.mchk:checked').length;
+  }));
+}
+
+function resultsForm(id){
+  const c = (S.settings.competitions || []).find(x => x.id === id);
+  if(!c) return;
+  const ids = c.members || [];
+  if(!ids.length){ say('Сначала отметьте состав.', 'warn'); return; }
+  const opts = '<option value="">не ставить</option>' +
+    Object.keys(RESULTS).map(k => '<option value="' + k + '">' + RESULTS[k] + '</option>').join('');
+  modal('<h3>Результаты: ' + esc(c.title) + '</h3>' +
+    '<div class="row">' +
+      '<div class="field grow"><label>Уровень</label><select class="in" id="rLevel">' +
+        '<option value="">—</option>' + Object.keys(LEVELS).map(k =>
+          '<option value="' + k + '">' + LEVELS[k] + '</option>').join('') + '</select></div>' +
+      '<div class="field"><label>Дата</label><input class="in" type="date" id="rDate" value="' +
+        (c.dateFrom || compDate(c) || todayStr()) + '"></div>' +
+    '</div>' +
+    '<div class="scroll"><table><tbody>' + ids.map(uid => {
+      const p = personById(uid);
+      return '<tr><td>' + esc(p ? p.name : uid) + '</td>' +
+        '<td><select class="in rres" data-u="' + uid + '" style="width:150px">' + opts + '</select></td>' +
+        '<td><input class="in rnote" data-u="' + uid + '" placeholder="награда, как написано в дипломе"></td></tr>';
+    }).join('') + '</tbody></table></div>' +
+    '<button class="btn pri" style="margin-top:12px" data-act="comp-results-save" data-id="' + esc(id) + '">' +
+      'Записать в олимпиады</button>');
 }
 
 function studentOptions(sel){
@@ -1515,25 +1748,58 @@ async function act(a, el, ev){
     topicForm('', '', { title: el.dataset.t, subject: 'План года · ' + el.dataset.r + ' · неделя ' + el.dataset.n,
                         target: PLAN_ROLE[el.dataset.r] ? 'role' : 'all', role: PLAN_ROLE[el.dataset.r] || '' });
     break;
-  case 'comp-add': {
-    const title = val('compTitle');
-    if(!title){ say('Укажите название соревнования.', 'err'); return; }
-    const list = (S.settings.competitions||[]).concat([{ title, when: val('compWhen'), term: val('compTerm'), status:'' }]);
-    const r = await call('saveSettings', [S.token, { competitions: list }], 'Добавлено');
-    if(r.ok){ S.settings = r.v; render(); }
+  case 'comp-form': compForm(el.dataset.id || ''); break;
+  case 'comp-save': {
+    const c = {
+      id: el.dataset.id || '', title: val('cTitle'), when: val('cWhen'),
+      dateFrom: val('cFrom'), dateTo: val('cTo'), place: val('cPlace'),
+      term: val('cTerm'), category: val('cCat'), status: val('cStatus'), note: val('cNote'),
+      members: ((S.settings.competitions || []).find(x => x.id === el.dataset.id) || {}).members || []
+    };
+    if(!c.title){ say('Укажите название соревнования.', 'err'); return; }
+    const r = await call('saveCompetition', [S.token, c], 'Сохранено');
+    if(r.ok){ S.settings.competitions = r.v; closeModal(); render(); }
     break;
   }
   case 'comp-del': {
-    const list = (S.settings.competitions||[]).filter((c,i) => i !== Number(el.dataset.i));
-    const r = await call('saveSettings', [S.token, { competitions: list }], 'Удалено');
-    if(r.ok){ S.settings = r.v; render(); }
+    if(!confirm('Удалить соревнование из календаря? Записанные награды останутся.')) return;
+    const r = await call('deleteCompetition', [S.token, el.dataset.id], 'Удалено');
+    if(r.ok){ S.settings.competitions = r.v; render(); }
     break;
   }
-
-  /* --- выгрузка --- */
-  case 'csv-report': csvReport(); break;
-  case 'csv-awards': csvAwards(); break;
-  case 'csv-topics': csvTopics(); break;
+  case 'comp-members': membersForm(el.dataset.id); break;
+  case 'comp-members-save': {
+    const c = (S.settings.competitions || []).find(x => x.id === el.dataset.id);
+    const members = Array.from(document.querySelectorAll('.mchk:checked')).map(x => x.value);
+    const r = await call('saveCompetition', [S.token, Object.assign({}, c, { members })],
+                         'В составе: ' + members.length);
+    if(r.ok){ S.settings.competitions = r.v; closeModal(); render(); }
+    break;
+  }
+  case 'comp-results': resultsForm(el.dataset.id); break;
+  case 'comp-results-save': {
+    const c = (S.settings.competitions || []).find(x => x.id === el.dataset.id);
+    const level = val('rLevel'), date = val('rDate');
+    const awards = [];
+    document.querySelectorAll('.rres').forEach(sel => {
+      if(!sel.value) return;
+      const uid = sel.dataset.u;
+      const note = (document.querySelector('.rnote[data-u="' + uid + '"]') || {}).value || '';
+      awards.push({ u: uid, title: c.title, date, subject: c.category || 'Робототехника',
+                    level, result: sel.value, note });
+    });
+    if(!awards.length){ say('Ни одному участнику не выбран результат.', 'err'); return; }
+    const r = await call('saveAwards', [S.token, awards], 'Записано результатов: ' + awards.length);
+    if(r.ok){
+      const ids = r.v.map(a => a.id);
+      S.awards = S.awards.filter(a => ids.indexOf(a.id) < 0).concat(r.v);
+      const done = Object.assign({}, c, { status: 'done' });
+      const rc = await call('saveCompetition', [S.token, done]);
+      if(rc.ok) S.settings.competitions = rc.v;
+      closeModal(); render();
+    }
+    break;
+  }
 
   /* --- ученики --- */
   case 'open-student': ev.preventDefault(); S.openStudent = el.dataset.id; S.tab = 'people'; render(); break;
@@ -1576,7 +1842,7 @@ async function act(a, el, ev){
   case 'save-person': {
     const p = personById(el.dataset.id);
     const r = await call('savePerson', [S.token, p.id, {
-      name: val('edName'), since: val('edSince'), cls: val('edCls'),
+      name: val('edName'), since: val('edSince'), birth: val('edBirth'), cls: val('edCls'),
       team: val('edTeam'), category: val('edCat'), teamRole: val('edRole') }], 'Сохранено');
     if(r.ok){ Object.assign(p, r.v); render(); }
     break;
