@@ -700,7 +700,7 @@ async function boot(){
     const cached = LS.get(K_CACHE);
     if(cached && cached.me && cached.settings){
       // показываем сохранённые данные сразу, свежие подтягиваем в фоне
-      apply(cached);
+      apply(cached, true);
       say('Обновляем данные…', 'ok');
       refresh();
       return;
@@ -783,8 +783,9 @@ function logout(auto){
   if(auto) say('Сессия истекла, войдите снова.', 'warn', 'gateMsg');
 }
 
-function apply(st){
+function apply(st, fromCache){
   document.getElementById('banner').innerHTML = '';
+  S.fresh = !fromCache;               // данные прямо от сервера, а не из памяти устройства
   S.me = st.me;
   S.settings = st.settings;
   S.people = st.people || [];
@@ -828,8 +829,19 @@ function tabList(){
           ['calendar','Календарь'], ['plan','План и темы']];
 }
 
+let versionAsked = false, versionKnown = false;
 function versionWarning(){
+  if(!S.fresh) return '';            // пока показываем сохранённую копию — судить о сервере рано
   const v = S.version || '';
+  if(v) versionKnown = true;
+  if(!v && !versionAsked){
+    /* Ответ без метки бывает у старого кода, но мог прийти и из кеша —
+       уточняем у сервера напрямую, прежде чем пугать. */
+    versionAsked = true;
+    api('boot', []).then(b => { S.version = (b && b.version) || ''; versionKnown = true; render(); }).catch(() => {});
+    return '';
+  }
+  if(!v && !versionKnown) return '';  // ответа ещё нет
   if(!v) return '<div class="msg warn">Серверный код устарел (в нём нет даже метки версии). ' +
     'Обновите Code.gs в Apps Script и выпустите новую версию развёртывания — иначе дни рождения, ' +
     'календарь и сводка достижений работать не будут.</div>';
