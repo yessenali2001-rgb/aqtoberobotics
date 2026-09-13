@@ -9,6 +9,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Посещаемость">
 <title>Посещаемость кружка — БІЛІМ-ИННОВАЦИЯ</title>
+<link rel="preconnect" href="https://script.google.com" crossorigin>
+<link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+<link rel="dns-prefetch" href="https://script.google.com">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="assets/icon-192.png">
 <link rel="apple-touch-icon" href="assets/icon-192.png">
@@ -224,6 +227,14 @@ button.cell{cursor:pointer}
   </div>
 </div>
 
+<!-- ЗАСТАВКА ПРИ ЗАГРУЗКЕ -->
+<div id="splash" class="gate hide">
+  <img class="logo" src="assets/logo-full.png" alt="БІЛІМ-ИННОВАЦИЯ">
+  <div class="card" style="text-align:center">
+    <p class="lead" id="splashMsg" style="margin:0">Подключаемся к таблице…</p>
+  </div>
+</div>
+
 <!-- ЭКРАН ВХОДА -->
 <div id="gate" class="gate hide">
   <img class="logo" src="assets/logo-full.png" alt="БІЛІМ-ИННОВАЦИЯ">
@@ -292,7 +303,7 @@ const LS = {
   set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} },
   del(k){ try { localStorage.removeItem(k); } catch(e){} }
 };
-const K_API='attApi', K_TOKEN='attToken', K_CACHE='attCache', K_THEME='attTheme';
+const K_API='attApi', K_TOKEN='attToken', K_CACHE='attCache', K_THEME='attTheme', K_ROSTER='attRoster';
 
 /* ================= словари ================= */
 const WD_SHORT = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
@@ -479,7 +490,20 @@ function setTheme(dark){
 
 /* ================= вход и загрузка ================= */
 function show(id){
-  ['setup','gate','app'].forEach(x => document.getElementById(x).classList.toggle('hide', x !== id));
+  ['setup','splash','gate','app'].forEach(x => document.getElementById(x).classList.toggle('hide', x !== id));
+}
+
+/* Apps Script после простоя просыпается долго — предупреждаем, чтобы не казалось, что всё зависло. */
+let splashTimer = null;
+function splash(on){
+  clearTimeout(splashTimer);
+  if(!on) return;
+  show('splash');
+  document.getElementById('splashMsg').textContent = 'Подключаемся к таблице…';
+  splashTimer = setTimeout(() => {
+    const el = document.getElementById('splashMsg');
+    if(el) el.textContent = 'Сервер Google просыпается после простоя — это бывает до 20 секунд. Дальше будет быстро.';
+  }, 3500);
 }
 
 async function boot(){
@@ -488,36 +512,56 @@ async function boot(){
   if(!S.api){ show('setup'); return; }
   S.token = LS.get(K_TOKEN) || '';
   if(S.token){
+    const cached = LS.get(K_CACHE);
+    if(cached && cached.me && cached.settings){
+      // показываем сохранённые данные сразу, свежие подтягиваем в фоне
+      apply(cached);
+      say('Обновляем данные…', 'ok');
+      refresh();
+      return;
+    }
+    splash(true);
     const r = await call('state', [S.token]);
+    splash(false);
     if(r.ok){ apply(r.v); return; }
   }
   await showGate();
 }
 
+function fillRoster(b){
+  const sel = document.getElementById('who');
+  document.getElementById('gateTitle').textContent = b.groupName || 'Посещаемость кружка';
+  const groups = { admin:[], assistant:[], student:[] };
+  b.roster.forEach(p => { (groups[p.role] || groups.student).push(p); });
+  let html = '<option value="">Выберите имя…</option>';
+  [['student','Ученики'],['assistant','Помощники'],['admin','Администраторы']].forEach(([k,label]) => {
+    if(!groups[k].length) return;
+    html += '<optgroup label="' + label + '">' +
+      groups[k].map(p => '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>').join('') +
+      '</optgroup>';
+  });
+  const keep = sel.value;
+  sel.innerHTML = html;
+  if(keep) sel.value = keep;
+}
+
 async function showGate(){
   show('gate');
   const sel = document.getElementById('who');
-  sel.innerHTML = '<option value="">Загружаем список…</option>';
+  const saved = LS.get(K_ROSTER);
+  if(saved && saved.roster && saved.roster.length) fillRoster(saved);   // из памяти телефона, мгновенно
+  else sel.innerHTML = '<option value="">Загружаем список…</option>';
   try {
     const b = await api('boot', []);
-    document.getElementById('gateTitle').textContent = b.groupName || 'Посещаемость кружка';
     if(b.needSetup){
-      say('В таблице ещё нет ни одного участника. Запустите функцию setup() в редакторе Apps Script.', 'warn', 'gateMsg');
+      say('В таблице ещё нет ни одного участника. Запустите функцию setupAll() в редакторе Apps Script.', 'warn', 'gateMsg');
       sel.innerHTML = '<option value="">—</option>';
       return;
     }
-    const groups = { admin:[], assistant:[], student:[] };
-    b.roster.forEach(p => { (groups[p.role] || groups.student).push(p); });
-    let html = '<option value="">Выберите имя…</option>';
-    [['student','Ученики'],['assistant','Помощники'],['admin','Администраторы']].forEach(([k,label]) => {
-      if(!groups[k].length) return;
-      html += '<optgroup label="' + label + '">' +
-        groups[k].map(p => '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>').join('') +
-        '</optgroup>';
-    });
-    sel.innerHTML = html;
+    LS.set(K_ROSTER, b);
+    fillRoster(b);
   } catch(e){
-    sel.innerHTML = '<option value="">—</option>';
+    if(!(saved && saved.roster && saved.roster.length)) sel.innerHTML = '<option value="">—</option>';
     say(e.message, 'err', 'gateMsg');
   }
 }
@@ -529,6 +573,7 @@ async function doLogin(){
   if(!pin){ say('Введите код.', 'err', 'gateMsg'); return; }
   const btn = document.getElementById('doLogin');
   btn.disabled = true; btn.textContent = 'Входим…';
+  const slow = setTimeout(() => { btn.textContent = 'Сервер просыпается…'; }, 3500);
   try {
     const st = await api('login', [id, pin]);
     S.token = st.token;
@@ -539,6 +584,7 @@ async function doLogin(){
   } catch(e){
     say(e.message, 'err', 'gateMsg');
   } finally {
+    clearTimeout(slow);
     btn.disabled = false; btn.textContent = 'Войти';
   }
 }
@@ -560,7 +606,7 @@ function apply(st){
   S.awards = st.awards || [];
   S.topics = st.topics || [];
   reindex();
-  LS.set(K_CACHE, { at: Date.now(), me: S.me });
+  LS.set(K_CACHE, st);          // чтобы в следующий раз открылось мгновенно
   if(!S.from){
     const ys = S.settings.yearStart, ye = S.settings.yearEnd;
     S.from = ys; S.to = (todayStr() < ye ? todayStr() : ye);

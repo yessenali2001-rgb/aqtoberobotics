@@ -49,12 +49,24 @@ var STATUSES = ['p','l','e','a'];     // был / опоздал / уважит�
 
 /* ================= доступ к таблице ================= */
 
-function book_() { return SHEET_ID ? SpreadsheetApp.openById(SHEET_ID) : SpreadsheetApp.getActive(); }
-function tz_() { return book_().getSpreadsheetTimeZone() || 'Etc/GMT'; }
+/* Обращения к таблице — самая дорогая часть запроса, поэтому книга,
+   листы и уже прочитанные строки кешируются на время одного вызова. */
+var _book = null, _tz = null, _sheet = {}, _rows = {};
+
+function book_() {
+  if (!_book) _book = SHEET_ID ? SpreadsheetApp.openById(SHEET_ID) : SpreadsheetApp.getActive();
+  return _book;
+}
+function tz_() {
+  if (!_tz) _tz = book_().getSpreadsheetTimeZone() || 'Etc/GMT';
+  return _tz;
+}
+function forget_(name) { delete _rows[name]; }
 
 var HDR_CHECKED = {};
 
 function sheet_(name) {
+  if (_sheet[name]) return _sheet[name];
   var bk = book_();
   var sh = bk.getSheetByName(name);
   if (!sh) {
@@ -64,6 +76,7 @@ function sheet_(name) {
     if (name === 'marks') sh.getRange('B:B').setNumberFormat('@');
     if (name === 'people') sh.getRange('G:H').setNumberFormat('@');
     HDR_CHECKED[name] = true;
+    _sheet[name] = sh;
     return sh;
   }
   // лист создан более старой версией скрипта — дописываем недостающие колонки
@@ -73,10 +86,12 @@ function sheet_(name) {
       sh.getRange(1, 1, 1, SHEETS[name].length).setValues([SHEETS[name]]);
     }
   }
+  _sheet[name] = sh;
   return sh;
 }
 
 function rows_(name) {
+  if (_rows[name]) return _rows[name];
   var vals = sheet_(name).getDataRange().getValues();
   var head = vals.shift() || SHEETS[name];
   var out = [];
@@ -86,6 +101,7 @@ function rows_(name) {
     for (var j = 0; j < head.length; j++) o[head[j]] = vals[i][j];
     out.push(o);
   }
+  _rows[name] = out;
   return out;
 }
 
@@ -93,6 +109,7 @@ function append_(name, obj) {
   sheet_(name).appendRow(SHEETS[name].map(function (h) {
     return obj[h] === undefined ? '' : obj[h];
   }));
+  forget_(name);
 }
 
 function update_(name, row, patch) {
@@ -100,9 +117,10 @@ function update_(name, row, patch) {
   var cur = sh.getRange(row, 1, 1, cols.length).getValues()[0];
   var out = cols.map(function (h, i) { return patch[h] === undefined ? cur[i] : patch[h]; });
   sh.getRange(row, 1, 1, out.length).setValues([out]);
+  forget_(name);
 }
 
-function drop_(name, row) { sheet_(name).deleteRow(row); }
+function drop_(name, row) { sheet_(name).deleteRow(row); forget_(name); }
 
 /* ================= мелкие утилиты ================= */
 
@@ -214,6 +232,7 @@ function createPerson_(role, name, pin, since, extra) {
     category: String(extra.category || ''), teamRole: String(extra.teamRole || '')
   };
   append_('people', row);
+  dropBootCache_();
   return row;
 }
 
@@ -311,14 +330,27 @@ function stateFor_(person) {
 
 var API = {};
 
-/** Список имён для экрана входа. */
+/** Сброс кеша списка входа — после любых изменений людей или настроек. */
+function dropBootCache_() {
+  try { CacheService.getScriptCache().remove('boot'); } catch (e) {}
+}
+
+/** Список имён для экрана входа. Меняется редко, поэтому кешируется. */
 API.boot = function () {
+  var cache = null;
+  try { cache = CacheService.getScriptCache(); } catch (e) {}
+  if (cache) {
+    var hit = cache.get('boot');
+    if (hit) { try { return JSON.parse(hit); } catch (e) {} }
+  }
   var s = readSettings_();
   var roster = rows_('people')
     .filter(function (p) { return String(p.active) !== '0'; })
     .map(function (p) { return { id: String(p.id), name: String(p.name), role: String(p.role) }; })
     .sort(function (a, b) { return a.name.localeCompare(b.name, 'ru'); });
-  return { groupName: s.groupName, roster: roster, needSetup: roster.length === 0 };
+  var out = { groupName: s.groupName, roster: roster, needSetup: roster.length === 0 };
+  if (cache) { try { cache.put('boot', JSON.stringify(out), 300); } catch (e) {} }
+  return out;
 };
 
 API.login = function (personId, pin) {
@@ -462,6 +494,7 @@ API.savePerson = function (token, id, patch) {
   if (t.role !== 'student' && p.role !== 'admin') throw new Error('Менять сотрудников может только администратор.');
   if (String(t.id) === String(p.id) && out.active === 0) throw new Error('Нельзя отключить самого себя.');
   update_('people', t._row, out);
+  dropBootCache_();
   return personPub_(findPerson_(id));
 };
 
@@ -494,6 +527,7 @@ API.deletePerson = function (token, id) {
     if (String(s.personId) === String(id)) drop_('sessions', s._row);
   });
   drop_('people', t._row);
+  dropBootCache_();
   return true;
 };
 
@@ -604,7 +638,10 @@ API.deleteTopic = function (token, id) {
 API.saveSettings = function (token, patch) {
   var p = auth_(token); requireAdmin_(p);
   patch = patch || {};
-  if (patch.groupName !== undefined) writeSetting_('groupName', String(patch.groupName).trim() || 'Кружок');
+  if (patch.groupName !== undefined) {
+    writeSetting_('groupName', String(patch.groupName).trim() || 'Кружок');
+    dropBootCache_();
+  }
   if (patch.yearStart !== undefined) writeSetting_('yearStart', dstr_(patch.yearStart));
   if (patch.yearEnd !== undefined) writeSetting_('yearEnd', dstr_(patch.yearEnd));
   if (patch.schedule !== undefined) {
@@ -642,6 +679,9 @@ function tell_(msg) {
   return msg;
 }
 
+/* Эти команды только читают данные, поэтому выполняются без блокировки. */
+var READ_ONLY = { boot: true, state: true };
+
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
@@ -655,10 +695,15 @@ function doGet(e) {
     var p = JSON.parse(raw);
     var fn = p.fn, args = p.args || [];
     if (!API.hasOwnProperty(fn)) throw new Error('Неизвестная команда: ' + fn);
-    var lock = LockService.getScriptLock();
-    lock.waitLock(25000);
-    try { out = { ok: true, result: API[fn].apply(null, args) }; }
-    finally { lock.releaseLock(); }
+    if (READ_ONLY[fn]) {
+      // чтение ничего не меняет — очередь не нужна, ответ приходит быстрее
+      out = { ok: true, result: API[fn].apply(null, args) };
+    } else {
+      var lock = LockService.getScriptLock();
+      lock.waitLock(25000);
+      try { out = { ok: true, result: API[fn].apply(null, args) }; }
+      finally { lock.releaseLock(); }
+    }
   } catch (err) {
     out = { ok: false, error: String((err && err.message) || err) };
   }
