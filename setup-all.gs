@@ -313,6 +313,17 @@ function topicsPub_(all, onlyStudentId) {
   return out;
 }
 
+/** Награды всего кружка — без идентификаторов, только для общей сводки. */
+function clubAwards_(people) {
+  var byId = {};
+  people.forEach(function (p) { byId[p.id] = p; });
+  return awardsPub_(rows_('awards')).map(function (a) {
+    var p = byId[a.u] || {};
+    return { name: p.name || '', team: p.team || '', cls: p.cls || '',
+             title: a.title, result: a.result, level: a.level };
+  }).filter(function (a) { return a.name; });
+}
+
 function stateFor_(person) {
   var settings = readSettings_();
   var people = rows_('people').map(personPub_);
@@ -325,7 +336,8 @@ function stateFor_(person) {
       awards: awardsPub_(rows_('awards'), me.id),
       topics: topicsPub_(rows_('topics'), me.id),
       birthdays: people.filter(function (x) { return x.role === 'student' && x.active && x.birth; })
-        .map(function (x) { return { name: x.name, birth: x.birth, team: x.team }; })
+        .map(function (x) { return { name: x.name, birth: x.birth, team: x.team }; }),
+      clubAwards: clubAwards_(people)
     };
   }
   return {

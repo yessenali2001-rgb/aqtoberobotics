@@ -355,7 +355,7 @@ const nf = n => (Math.round(n*10)/10).toString().replace('.', ',');
 /* ================= состояние ================= */
 const S = {
   api: '', token: '', me: null, settings: null,
-  people: [], marks: [], awards: [], topics: [], birthdays: [],
+  people: [], marks: [], awards: [], topics: [], birthdays: [], clubAwards: [],
   marksIdx: {}, tab: '', day: todayStr(), month: todayStr().slice(0,7),
   from: '', to: '', sort: 'miss', openStudent: '', busy: false,
   fTeam: '', fCat: '', fRole: '', q: ''
@@ -479,6 +479,46 @@ function bdayBanner(){
   return '<div class="msg bdaysoon">🎂 Ближайший день рождения: <b>' + esc(n.p.name) + '</b>, ' +
     dayMonth(n.b.date) + ' — ' + daysWord(n.b.days) + ' (' + yearsWord(n.b.age) + ')</div>';
 }
+
+/* ================= сводка достижений ================= */
+/* У педагога полные записи, у ученика — присланная сводка по кружку. */
+function awardRows(){
+  if(!isStaff()) return S.clubAwards || [];
+  return S.awards.map(a => {
+    const p = personById(a.u) || {};
+    return { name: p.name || '—', team: p.team || '', cls: p.cls || '',
+             title: a.title, result: a.result, level: a.level, u: a.u, active: p.active };
+  });
+}
+
+const MEDALS = ['gold','silver','bronze','honor','part'];
+const MEDAL_ICON = { gold:'🥇', silver:'🥈', bronze:'🥉', honor:'★', part:'·' };
+
+function tally(rows){
+  const t = { gold:0, silver:0, bronze:0, honor:0, part:0, total:0 };
+  rows.forEach(a => { if(t[a.result] !== undefined){ t[a.result]++; t.total++; } });
+  return t;
+}
+/* олимпийский порядок: сначала золото, потом серебро, потом бронза */
+const byMedals = (a,b) => (b.t.gold - a.t.gold) || (b.t.silver - a.t.silver) ||
+                          (b.t.bronze - a.t.bronze) || (b.t.total - a.t.total) ||
+                          String(a.key).localeCompare(String(b.key), 'ru');
+
+function groupTally(rows, keyOf){
+  const map = {};
+  rows.forEach(a => {
+    const k = keyOf(a) || '—';
+    (map[k] = map[k] || []).push(a);
+  });
+  return Object.keys(map).map(k => ({ key:k, rows:map[k], t:tally(map[k]) })).sort(byMedals);
+}
+
+function medalCells(t){
+  return MEDALS.map(m => '<td class="num">' + (t[m] || '<span class="muted">·</span>') + '</td>').join('') +
+         '<td class="num"><b>' + t.total + '</b></td>';
+}
+const MEDAL_HEAD = MEDALS.map(m => '<th class="num" title="' + RESULTS[m] + '">' + MEDAL_ICON[m] + '</th>').join('') +
+                   '<th class="num">Всего</th>';
 
 /* ================= календарь соревнований ================= */
 const COMP_STATUS = { plan:'Планируем', prep:'Готовимся', done:'Прошло', skip:'Не едем' };
@@ -742,6 +782,7 @@ function apply(st){
   S.awards = st.awards || [];
   S.topics = st.topics || [];
   S.birthdays = st.birthdays || [];      // ученику присылают дни рождения товарищей
+  S.clubAwards = st.clubAwards || [];    // и общую сводку наград кружка
   reindex();
   LS.set(K_CACHE, st);          // чтобы в следующий раз открылось мгновенно
   if(!S.from){
@@ -766,12 +807,12 @@ async function refresh(){
 function tabList(){
   if(isStaff()) return [
     ['day','Журнал'], ['grid','Таблица'], ['report','Анализ года'],
-    ['people','Ученики'], ['extra','Олимпиады и темы'],
-    ['calendar','Календарь'], ['plan','План года'],
+    ['people','Ученики'], ['extra','Достижения'],
+    ['calendar','Календарь'], ['plan','План и темы'],
     ...(isAdmin() ? [['settings','Настройки']] : [])
   ];
-  return [['my','Мои занятия'], ['myextra','Олимпиады и темы'],
-          ['calendar','Календарь'], ['plan','План года']];
+  return [['my','Мои занятия'], ['myextra','Достижения'],
+          ['calendar','Календарь'], ['plan','План и темы']];
 }
 
 function render(){
@@ -1218,32 +1259,39 @@ function topicsTable(list, withName){
 }
 
 function awardsMatrix(){
-  /* порядок колонок — как соревнования идут в данных (хронология сезона) */
+  const rows = awardRows().filter(a => !isStaff() || visible(true).some(p => p.id === a.u));
   const titles = [];
-  S.awards.forEach(a => { if(a.title && titles.indexOf(a.title) < 0) titles.push(a.title); });
+  rows.forEach(a => { if(a.title && titles.indexOf(a.title) < 0) titles.push(a.title); });
   if(!titles.length) return '';
 
-  const rows = visible(true).map(p => {
-    const own = S.awards.filter(a => a.u === p.id);
-    if(!own.length) return '';
+  const byName = {};
+  rows.forEach(a => { (byName[a.name] = byName[a.name] || []).push(a); });
+  const names = Object.keys(byName).sort((x,y) => x.localeCompare(y,'ru'));
+
+  const body = names.map(name => {
+    const own = byName[name];
     const cells = titles.map(t => {
       const a = own.find(x => x.title === t);
       if(!a) return '<td></td>';
-      return '<td><span class="mx ' + a.result + '" title="' + esc(t + ' — ' + (RESULTS[a.result]||'') +
-        (a.note ? ': ' + a.note : '')) + '">' + (RES_SHORT[a.result] || '•') + '</span></td>';
+      return '<td><span class="mx ' + a.result + '" title="' + esc(t + ' — ' + (RESULTS[a.result] || '')) + '">' +
+        (MEDAL_ICON[a.result] === '★' ? '★' : (RES_SHORT[a.result] || '•')) + '</span></td>';
     }).join('');
     const prizes = own.filter(a => ['gold','silver','bronze'].indexOf(a.result) >= 0).length;
-    return '<tr><td class="stick"><a href="#" data-act="open-student" data-id="' + p.id + '">' + esc(p.name) + '</a>' +
-      (p.team ? '<br><span class="muted small">' + esc(p.team) + '</span>' : '') + '</td>' +
+    const id = (own[0] || {}).u;
+    const label = (isStaff() && id)
+      ? '<a href="#" data-act="open-student" data-id="' + id + '">' + esc(name) + '</a>'
+      : esc(name);
+    const team = (own[0] || {}).team;
+    return '<tr><td class="stick">' + label +
+      (team ? '<br><span class="muted small">' + esc(team) + '</span>' : '') + '</td>' +
       cells + '<td class="num"><b>' + prizes + '</b></td></tr>';
-  }).filter(Boolean).join('');
+  }).join('');
 
-  if(!rows) return '';
   return '<div class="sect"><h3>Кто где выступал</h3><div class="scroll"><table class="grid">' +
     '<thead><tr><th class="stick">Ученик</th>' +
     titles.map(t => '<th title="' + esc(t) + '"><div style="writing-mode:vertical-rl;transform:rotate(180deg);' +
       'max-height:150px;overflow:hidden;font-weight:600;padding:4px 0">' + esc(t) + '</div></th>').join('') +
-    '<th>Приз.</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<th>Приз.</th></tr></thead><tbody>' + body + '</tbody></table></div>' +
     '<div class="legend">' +
       '<span><i class="dot" style="background:#C9B291"></i>1 — первое место</span>' +
       '<span><i class="dot" style="background:#D9D9E3"></i>2 — второе</span>' +
@@ -1265,45 +1313,70 @@ function viewExtra(){
   const vis = {};
   visible(true).forEach(p => { vis[p.id] = p; });
   const q = S.q.trim().toLowerCase();
+
+  /* сводка считается по всем, кого видно с учётом фильтра */
+  let rows = awardRows();
+  if(isStaff()) rows = rows.filter(a => vis[a.u]);
+  const t = tally(rows);
+  const people = groupTally(rows, a => a.name);
+  const teams_ = groupTally(rows.filter(a => a.team), a => a.team);
+  const comps = groupTally(rows, a => a.title);
+  const levels = groupTally(rows.filter(a => a.level), a => LEVELS[a.level] || a.level);
+
+  const table = (title, list, firstCol, limit) => {
+    if(!list.length) return '';
+    const shown = limit ? list.slice(0, limit) : list;
+    return '<div class="sect"><h3>' + title + '</h3><div class="scroll"><table><thead><tr>' +
+      '<th></th><th>' + firstCol + '</th>' + MEDAL_HEAD + '</tr></thead><tbody>' +
+      shown.map((g,i) => '<tr><td class="num muted">' + (i+1) + '</td><td>' + esc(g.key) + '</td>' +
+        medalCells(g.t) + '</tr>').join('') +
+      '</tbody></table></div>' +
+      (limit && list.length > limit
+        ? '<details style="margin-top:10px"><summary class="muted small" style="cursor:pointer">Показать всех (' +
+          list.length + ')</summary><div class="scroll" style="margin-top:10px"><table><tbody>' +
+          list.slice(limit).map((g,i) => '<tr><td class="num muted">' + (i+1+limit) + '</td><td>' + esc(g.key) + '</td>' +
+            medalCells(g.t) + '</tr>').join('') + '</tbody></table></div></details>'
+        : '') + '</div>';
+  };
+
+  const awFull = isStaff() ? S.awards.slice().sort((a,b) => (b.date||'').localeCompare(a.date||'')) : [];
   const match = (p, text) => !q ||
     (p && p.name.toLowerCase().indexOf(q) >= 0) || String(text).toLowerCase().indexOf(q) >= 0;
+  const awShown = awFull.filter(a => vis[a.u] && match(vis[a.u], a.title + ' ' + a.subject + ' ' + a.note));
 
-  const aw = S.awards.slice().sort((a,b) => (b.date||'').localeCompare(a.date||''));
-  const awShown = aw.filter(a => vis[a.u] && match(vis[a.u], a.title + ' ' + a.subject + ' ' + a.note));
-  const tpShown = S.topics.filter(t => vis[t.u] && match(vis[t.u], t.title + ' ' + t.subject));
-  const byStudent = {};
-  S.awards.forEach(a => { byStudent[a.u] = (byStudent[a.u]||0) + 1; });
-  const top = students().map(p => ({ p, n: byStudent[p.id]||0 })).filter(x => x.n).sort((a,b) => b.n-a.n);
-
-  return '<div class="head"><h2>Олимпиады и темы</h2>' +
-      '<div class="row"><button class="btn sm" data-act="csv-awards">CSV олимпиад</button>' +
-      '<button class="btn sm" data-act="csv-topics">CSV тем</button></div></div>' +
+  return '<div class="head"><h2>Достижения кружка</h2>' +
+      (isStaff() ? '<button class="btn sm" data-act="csv-awards">Выгрузить CSV</button>' : '') + '</div>' +
+    filterBar() +
 
     '<div class="cards">' +
-      tile(S.awards.length, '', 'Записей об олимпиадах') +
-      tile(S.awards.filter(a => ['gold','silver','bronze'].indexOf(a.result)>=0).length, '', 'Призовых мест') +
-      tile(top.length, '', 'Участников') +
-      tile(S.topics.filter(t => t.status!=='done').length, '', 'Тем в работе') +
+      tile(t.gold, '', '🥇 Первых мест') +
+      tile(t.silver, '', '🥈 Вторых мест') +
+      tile(t.bronze, '', '🥉 Третьих мест') +
+      tile(t.honor, '', '★ Наград и грамот') +
+      tile(comps.length, '', 'Соревнований') +
+      tile(people.length, '', 'Призёров и участников') +
     '</div>' +
 
-    filterBar() +
+    table('Медальный зачёт учеников', people, 'Ученик', 10) +
+    table('По командам', teams_, 'Команда') +
+    table('По уровню соревнований', levels, 'Уровень') +
+    table('По соревнованиям', comps, 'Соревнование') +
+
     awardsMatrix() +
 
-    '<div class="sect"><div class="head"><h3>Все записи об олимпиадах</h3>' +
-      (isStaff() ? '<button class="btn sm pri" data-act="award-form">Добавить запись</button>' : '') + '</div>' +
-      '<details' + (S.q ? ' open' : '') + '><summary class="muted small" style="cursor:pointer;margin-bottom:12px">' +
-        'Развернуть список (' + awShown.length + ')</summary>' +
-        '<div class="row" style="margin-bottom:12px">' +
-          '<input class="in grow" placeholder="Поиск по ученику или соревнованию" value="' + esc(S.q) + '" data-act="q">' +
-        '</div>' +
-        awardsTable(limitRows(awShown), true) +
-        moreNote(awShown.length, aw.length) +
-      '</details></div>' +
-
-    '<div class="sect"><div class="head"><h3>Темы для изучения</h3>' +
-      (isStaff() ? '<button class="btn sm pri" data-act="topic-form">Добавить тему</button>' : '') + '</div>' +
-      topicsTable(limitRows(tpShown), true) +
-      moreNote(tpShown.length, S.topics.length) + '</div>';
+    (isStaff()
+      ? '<div class="sect"><div class="head"><h3>Все записи</h3>' +
+          '<button class="btn sm pri" data-act="award-form">Добавить запись</button></div>' +
+          '<details' + (S.q ? ' open' : '') + '><summary class="muted small" style="cursor:pointer;margin-bottom:12px">' +
+            'Развернуть список (' + awShown.length + ')</summary>' +
+            '<div class="row" style="margin-bottom:12px">' +
+              '<input class="in grow" placeholder="Поиск по ученику или соревнованию" value="' + esc(S.q) + '" data-act="q">' +
+            '</div>' +
+            awardsTable(limitRows(awShown), true) + moreNote(awShown.length, awFull.length) +
+          '</details></div>'
+      : '<div class="sect"><h3>Мои награды</h3>' +
+          awardsTable(S.awards.filter(a => a.u === S.me.id)
+            .sort((a,b) => (b.date||'').localeCompare(a.date||'')), false) + '</div>');
 }
 
 function memberChips(c){
@@ -1413,9 +1486,20 @@ function viewPlan(){
         esc(x.role) + '" data-t="' + esc(x.task) + '">Назначить</button></td>' : '') + '</tr>';
   }).join('');
 
-  return '<div class="head"><h2>План на учебный год</h2>' +
+  const tp = isStaff() ? S.topics : S.topics.filter(x => x.u === S.me.id);
+  const topicsBlock =
+    '<div class="sect"><div class="head"><h3>Темы для изучения</h3>' +
+      (isStaff() ? '<div class="row" style="gap:6px"><button class="btn sm" data-act="csv-topics">CSV</button>' +
+        '<button class="btn sm pri" data-act="topic-form">Добавить тему</button></div>' : '') + '</div>' +
+      topicsTable(limitRows(tp), isStaff()) + moreNote(tp.length, S.topics.length) +
+      (isStaff() ? '' : '<p class="small muted" style="margin:10px 0 0">Кнопка справа отмечает, что вы начали или освоили тему.</p>') +
+    '</div>';
+
+  return '<div class="head"><h2>План и темы</h2>' +
       (mine && mine.teamRole ? '<span class="muted small">Ваша роль: ' +
         (TEAM_ROLES[mine.teamRole] || mine.teamRole) + '</span>' : '') + '</div>' +
+    topicsBlock +
+    '<h3 style="margin:18px 0 12px">План на учебный год</h3>' +
     (plan.length
       ? chips + '<div class="sect"><div class="scroll"><table><tbody>' + rows + '</tbody></table></div>' +
         (isStaff() ? '<p class="small muted" style="margin:10px 0 0">«Назначить» превращает пункт плана в тему для ученика, команды или всех сразу.</p>' : '') + '</div>'
@@ -1669,20 +1753,7 @@ function viewMy(){
         : '<p class="muted">Пропусков нет — отлично!</p>') + '</div>';
 }
 
-function viewMyExtra(){
-  const aw = S.awards.filter(a => a.u === S.me.id).sort((a,b) => (b.date||'').localeCompare(a.date||''));
-  const tp = S.topics.filter(t => t.u === S.me.id);
-  return '<div class="head"><h2>Олимпиады и темы</h2></div>' +
-    '<div class="cards">' +
-      tile(aw.length, '', 'Олимпиад') +
-      tile(aw.filter(a => ['gold','silver','bronze'].indexOf(a.result)>=0).length, '', 'Призовых мест') +
-      tile(tp.filter(t => t.status!=='done').length, '', 'Тем изучить') +
-      tile(tp.filter(t => t.status==='done').length, '', 'Тем освоено') +
-    '</div>' +
-    '<div class="sect"><h3>Мои олимпиады</h3>' + awardsTable(aw, false) + '</div>' +
-    '<div class="sect"><h3>Мои темы</h3>' + topicsTable(tp, false) +
-      '<p class="small muted" style="margin:10px 0 0">Кнопка справа отмечает, что вы начали или освоили тему.</p></div>';
-}
+const viewMyExtra = viewExtra;
 
 /* ================= ДЕЙСТВИЯ ================= */
 const val = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
