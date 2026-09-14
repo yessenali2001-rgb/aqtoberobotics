@@ -29,7 +29,7 @@
  *  Установка описана в attendance/README.md
  *************************************************************/
 
-var VERSION = '2026-09-17';         // метка версии кода: видна в ответе сервера
+var VERSION = '2026-09-18';         // метка версии кода: видна в ответе сервера
 var SHEET_ID = '';                    // пусто = скрипт привязан к таблице
 var FIRST_ADMIN_NAME = 'Администратор';
 var SESSION_DAYS = 90;                // сколько дней держится вход
@@ -38,7 +38,7 @@ var LOCK_MINUTES = 15;                // на сколько блокирует�
 
 var SHEETS = {
   people:   ['id','role','name','pinHash','salt','active','since','createdAt','failCount','lockUntil','note',
-             'cls','team','category','teamRole','birth','children'],
+             'cls','team','category','teamRole','birth','children','email'],
   marks:    ['id','date','studentId','status','hours','note','updatedAt','updatedBy'],
   settings: ['key','value'],
   sessions: ['token','personId','createdAt','expiresAt'],
@@ -185,6 +185,9 @@ function defaultSettings_() {
     yearStart: start,
     yearEnd: end,
     holidays: [],                      // [{date:'2026-01-01', note:'Каникулы'}]
+    siteUrl: 'https://yessenali2001-rgb.github.io/aqtoberobotics/',
+    mailEnabled: '0',                  // рассылка родителям выключена, пока не включат
+    mailHour: '19',                    // во сколько уходит письмо
     competitions: [],                  // [{title:'WRO', when:'April - May', term:'4 term', status:''}]
     plan: []                           // [{month:'SEPTEMBER', week:'I', n:'1', role:'Builder', task:'…'}]
   };
@@ -232,7 +235,8 @@ function personPub_(p) {
     category: String(p.category || ''), teamRole: String(p.teamRole || ''),
     birth: looseDate_(p.birth),
     children: String(p.children || '').split(',').map(function (x) { return x.trim(); })
-      .filter(function (x) { return x; })
+      .filter(function (x) { return x; }),
+    email: String(p.email || '').trim()
   };
 }
 
@@ -256,7 +260,8 @@ function createPerson_(role, name, pin, since, extra) {
     cls: String(extra.cls || ''), team: String(extra.team || ''),
     category: String(extra.category || ''), teamRole: String(extra.teamRole || ''),
     birth: dstr_(extra.birth),
-    children: (extra.children || []).join(',')
+    children: (extra.children || []).join(','),
+    email: String(extra.email || '').trim()
   };
   append_('people', row);
   dropBootCache_();
@@ -536,7 +541,7 @@ API.addStudents = function (token, names, since, extra) {
 };
 
 /** Родитель: свой код, видит только своих детей. */
-API.addParent = function (token, name, childIds) {
+API.addParent = function (token, name, childIds, email) {
   var p = auth_(token); requireStaff_(p);
   var kids = (childIds || []).map(String).filter(function (id) {
     var c = findPerson_(id);
@@ -544,7 +549,7 @@ API.addParent = function (token, name, childIds) {
   });
   if (!kids.length) throw new Error('Выберите хотя бы одного ребёнка.');
   var pin = genPin_(4);
-  var row = createPerson_('parent', name, pin, today_(), { children: kids });
+  var row = createPerson_('parent', name, pin, today_(), { children: kids, email: email });
   return { person: personPub_(row), pin: pin };
 };
 
@@ -569,6 +574,7 @@ API.savePerson = function (token, id, patch) {
   if (patch.since !== undefined) out.since = dstr_(patch.since);
   if (patch.note !== undefined) out.note = String(patch.note);
   if (patch.birth !== undefined) out.birth = dstr_(patch.birth);
+  if (patch.email !== undefined) out.email = String(patch.email).trim();
   if (patch.children !== undefined) {
     out.children = (patch.children || []).map(String).filter(function (id) {
       var c = findPerson_(id);
@@ -918,6 +924,12 @@ API.saveSettings = function (token, patch) {
                n: String(x.n || ''), role: String(x.role || ''), task: String(x.task || '') };
     }).filter(function (x) { return x.task; }));
   }
+  if (patch.siteUrl !== undefined) writeSetting_('siteUrl', String(patch.siteUrl).trim());
+  if (patch.mailEnabled !== undefined) writeSetting_('mailEnabled', patch.mailEnabled ? '1' : '0');
+  if (patch.mailHour !== undefined) {
+    var h = Math.min(23, Math.max(0, num_(patch.mailHour, 19)));
+    writeSetting_('mailHour', String(h));
+  }
   if (patch.holidays !== undefined) {
     var hs = (patch.holidays || []).filter(function (h) { return h && dstr_(h.date); })
       .map(function (h) { return { date: dstr_(h.date), note: String(h.note || '') }; });
@@ -925,6 +937,100 @@ API.saveSettings = function (token, patch) {
   }
   return readSettings_();
 };
+
+/*************************************************************
+ *  ПИСЬМА РОДИТЕЛЯМ
+ *
+ *  Раз в день — одно письмо на родителя со сводкой за сегодня:
+ *  пропустил, опоздал или отсутствовал по уважительной причине.
+ *  Чтобы письма уходили сами, запустите один раз installDailyMail().
+ *************************************************************/
+
+var MAIL_WORDS = { a: 'пропустил занятие', l: 'опоздал', e: 'отсутствовал по уважительной причине' };
+
+function dailyMailText_(date, items, settings) {
+  var d = parseDate_(date);
+  var lines = items.map(function (it) {
+    return '• ' + it.name + ' — ' + (MAIL_WORDS[it.status] || it.status) +
+      (it.hours ? ' (' + it.hours + ' ч)' : '');
+  });
+  return 'Здравствуйте!\n\n' +
+    'Сводка за ' + date + ' по кружку «' + settings.groupName + '»:\n\n' +
+    lines.join('\n') + '\n\n' +
+    'Подробности — в личном кабинете родителя:\n' + (settings.siteUrl || '') + '\n\n' +
+    'Если отсутствие по уважительной причине, сообщите руководителю кружка.\n\n' +
+    'Это письмо отправлено автоматически, отвечать на него не нужно.';
+}
+
+function parseDate_(ds) { var p = String(ds).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+
+/** Собрать и разослать сводку за день. Возвращает, что получилось. */
+function sendDailyMail(dateStr) {
+  var settings = readSettings_();
+  if (String(settings.mailEnabled) !== '1') return 'Рассылка выключена в настройках сайта.';
+
+  var date = dstr_(dateStr) || today_();
+  var people = rows_('people').map(personPub_);
+  var byId = {};
+  people.forEach(function (p) { byId[p.id] = p; });
+
+  /* что случилось сегодня */
+  var todayMarks = {};
+  rows_('marks').forEach(function (m) {
+    if (dstr_(m.date) !== date) return;
+    var st = String(m.status);
+    if (st !== 'a' && st !== 'l' && st !== 'e') return;
+    var plan = Number(settings.schedule[parseDate_(date).getDay()]) || 0;
+    todayMarks[String(m.studentId)] = { status: st, hours: st === 'l' ? 0 : plan };
+  });
+  if (!Object.keys(todayMarks).length) return 'За ' + date + ' пропусков нет — писать не о чем.';
+
+  var sent = 0, skipped = [];
+  people.forEach(function (par) {
+    if (par.role !== 'parent' || !par.active) return;
+    if (!par.email) { skipped.push(par.name + ' (нет адреса)'); return; }
+    var items = [];
+    par.children.forEach(function (kid) {
+      var m = todayMarks[kid];
+      if (!m) return;
+      items.push({ name: (byId[kid] || {}).name || kid, status: m.status, hours: m.hours });
+    });
+    if (!items.length) return;
+    try {
+      MailApp.sendEmail(par.email,
+        'Кружок «' + settings.groupName + '»: сводка за ' + date,
+        dailyMailText_(date, items, settings));
+      sent++;
+    } catch (e) {
+      skipped.push(par.name + ' (' + e.message + ')');
+    }
+  });
+
+  return 'Писем отправлено: ' + sent +
+    (skipped.length ? '\nНе отправлено: ' + skipped.join(', ') : '');
+}
+
+/** Кнопка «Отправить сейчас» на сайте. */
+API.sendMailNow = function (token, dateStr) {
+  var p = auth_(token); requireAdmin_(p);
+  return sendDailyMail(dateStr);
+};
+
+/** Запустить один раз: включает ежедневную отправку. */
+function installDailyMail() {
+  removeDailyMail();
+  var hour = Math.min(23, Math.max(0, num_(readSettings_().mailHour, 19)));
+  ScriptApp.newTrigger('sendDailyMail').timeBased().atHour(hour).everyDays(1).create();
+  return tell_('Ежедневная рассылка включена: письма уходят около ' + hour + ':00.\n' +
+    'Не забудьте включить её и в настройках сайта.');
+}
+
+function removeDailyMail() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'sendDailyMail') ScriptApp.deleteTrigger(t);
+  });
+  return 'Ежедневная рассылка выключена.';
+}
 
 /* ================= точка входа ================= */
 

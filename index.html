@@ -370,11 +370,11 @@ img.ava{display:block}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-17';
+const SITE_BUILD = '2026-09-18';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
-const NEED_VERSION = '2026-09-17';
+const NEED_VERSION = '2026-09-18';
 
 const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycby8pKX61ElEv1d5koPQC3_ErK9aYHmlS24UqFCFwZtWo5e8y-TmdJSs1Rk4ipOBTz76/exec';
 
@@ -567,6 +567,7 @@ async function loadPhotos(){
 /* Фотографии умеет только свежий серверный код. */
 const photosReady = () => (S.version || '') >= '2026-09-16';
 const parentsReady = () => (S.version || '') >= '2026-09-17';
+const mailReady = () => (S.version || '') >= '2026-09-18';
 
 const initials = name => String(name || '').trim().split(/\s+/).slice(0,2)
   .map(w => w.charAt(0)).join('');
@@ -1453,6 +1454,8 @@ function parentsBlock(){
     }).join(' ') || '<span class="muted small">дети не указаны</span>';
     return '<tr><td>' + esc(p.name) + (p.active ? '' : ' <span class="chip">архив</span>') + '</td>' +
       '<td>' + kids + '</td>' +
+      '<td class="muted small opt">' + (p.email ? esc(p.email) :
+        (S.settings.mailEnabled === '1' ? '<span style="color:var(--coral)">нет адреса</span>' : '—')) + '</td>' +
       '<td><div class="row" style="gap:6px">' +
         '<button class="btn sm" data-act="parent-kids" data-id="' + p.id + '">Дети</button>' +
         '<button class="btn sm" data-act="reset-pin" data-id="' + p.id + '">Новый код</button>' +
@@ -1464,7 +1467,8 @@ function parentsBlock(){
   return '<div class="sect"><div class="head"><h3>Родители' +
       (list.length ? ' <span class="muted small">(' + list.length + ')</span>' : '') + '</h3>' +
       '<button class="btn sm pri" data-act="parent-form">Добавить родителя</button></div>' +
-    (rows ? '<div class="scroll"><table><thead><tr><th>Родитель</th><th>Дети</th><th></th></tr></thead>' +
+    (rows ? '<div class="scroll"><table><thead><tr><th>Родитель</th><th>Дети</th>' +
+            '<th class="opt">Email</th><th></th></tr></thead>' +
             '<tbody>' + rows + '</tbody></table></div>'
           : '<p class="muted">Пока никого. Родитель входит своим кодом и видит только своего ребёнка: ' +
             'занятия, пропуски, награды и темы.</p>') + '</div>';
@@ -1475,6 +1479,9 @@ function parentForm(id){
   const chosen = p ? (p.children || []) : [];
   modal('<h3>' + (p ? 'Дети: ' + esc(p.name) : 'Новый родитель') + '</h3>' +
     (p ? '' : '<div class="field"><label>Имя родителя</label><input class="in" id="parName" placeholder="Фамилия и имя"></div>') +
+    '<div class="field"><label>Email для писем о пропусках</label>' +
+      '<input class="in" id="parMail" type="email" placeholder="можно оставить пустым" value="' +
+      esc(p ? p.email : '') + '"></div>' +
     '<p class="small muted">Отметьте, чьи это дети. Родитель увидит только их.</p>' +
     '<div class="pick">' + students().map(st =>
       '<label><input type="checkbox" class="kchk" value="' + st.id + '"' +
@@ -2143,6 +2150,22 @@ function viewSettings(){
       '<p class="small muted" style="margin:10px 0 0">Помощник может отмечать посещаемость, добавлять учеников, олимпиады и темы. ' +
       'Менять настройки, роли и удалять данные может только администратор.</p></div>' +
 
+    (mailReady() ? '<div class="sect"><h3>Письма родителям</h3>' +
+      '<p class="small muted" style="margin:0 0 12px">Раз в день родителю уходит одно письмо со сводкой: ' +
+        'кто пропустил, опоздал или отсутствовал по уважительной причине. ' +
+        'Письма идут только тем, у кого указан адрес.</p>' +
+      '<div class="row">' +
+        '<label class="row" style="gap:8px"><input type="checkbox" id="mailOn"' +
+          (S.settings.mailEnabled === '1' ? ' checked' : '') + '> Включить рассылку</label>' +
+        '<label class="row small muted" style="gap:8px">Время <input class="in" style="width:80px" ' +
+          'type="number" min="0" max="23" id="mailHour" value="' + (S.settings.mailHour || '19') + '"> :00</label>' +
+        '<button class="btn" data-act="mail-save">Сохранить</button>' +
+        '<button class="btn sm" data-act="mail-now">Отправить сейчас</button>' +
+      '</div>' +
+      '<p id="mailOut" class="small muted" style="margin:10px 0 0"></p>' +
+      '<p class="small muted" style="margin:8px 0 0">Чтобы письма уходили сами, один раз запустите ' +
+        'функцию <b>installDailyMail</b> в Apps Script — она поставит ежедневный запуск.</p></div>' : '') +
+
     '<div class="sect"><h3>Проверка сервера</h3>' +
       '<div class="scroll"><table><tbody>' +
         '<tr><td>Сборка сайта</td><td><b>' + SITE_BUILD + '</b></td></tr>' +
@@ -2377,12 +2400,13 @@ async function act(a, el, ev){
     const kids = Array.from(document.querySelectorAll('.kchk:checked')).map(x => x.value);
     if(!kids.length){ say('Отметьте хотя бы одного ребёнка.', 'err'); return; }
     if(el.dataset.id){
-      const r = await call('savePerson', [S.token, el.dataset.id, { children: kids }], 'Сохранено');
+      const r = await call('savePerson', [S.token, el.dataset.id,
+        { children: kids, email: val('parMail') }], 'Сохранено');
       if(r.ok){ Object.assign(personById(el.dataset.id), r.v); closeModal(); render(); }
     } else {
       const name = val('parName');
       if(!name){ say('Введите имя родителя.', 'err'); return; }
-      const r = await call('addParent', [S.token, name, kids]);
+      const r = await call('addParent', [S.token, name, kids, val('parMail')]);
       if(r.ok){
         S.people.push(r.v.person);
         closeModal(); render();
@@ -2555,6 +2579,20 @@ async function act(a, el, ev){
 
   case 'go-calendar': S.tab = 'calendar'; S.openStudent = ''; render(); break;
   case 'hard-reload': hardReload(); break;
+  case 'mail-save': {
+    const on = document.getElementById('mailOn').checked;
+    const r = await call('saveSettings', [S.token,
+      { mailEnabled: on, mailHour: num('mailHour') }], 'Сохранено');
+    if(r.ok){ S.settings = r.v; render(); }
+    break;
+  }
+  case 'mail-now': {
+    const out = document.getElementById('mailOut');
+    out.textContent = 'Отправляем…';
+    const r = await call('sendMailNow', [S.token, S.day]);
+    out.textContent = r.ok ? String(r.v) : 'не получилось';
+    break;
+  }
   case 'ping': {
     const out = document.getElementById('pingOut');
     out.textContent = 'меряем…';
