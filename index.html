@@ -370,11 +370,11 @@ img.ava{display:block}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-16-3';
+const SITE_BUILD = '2026-09-17';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
-const NEED_VERSION = '2026-09-16';
+const NEED_VERSION = '2026-09-17';
 
 const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycby8pKX61ElEv1d5koPQC3_ErK9aYHmlS24UqFCFwZtWo5e8y-TmdJSs1Rk4ipOBTz76/exec';
 
@@ -402,7 +402,7 @@ const LEVELS = { school:'Школьный', city:'Городской', region:'�
 const RESULTS = { gold:'1 место', silver:'2 место', bronze:'3 место', honor:'Грамота', part:'Участие' };
 const RES_SHORT = { gold:'1', silver:'2', bronze:'3', honor:'★', part:'·' };
 const TSTAT = { todo:'Изучить', doing:'В процессе', done:'Освоено' };
-const ROLES = { admin:'Администратор', assistant:'Помощник', student:'Ученик' };
+const ROLES = { admin:'Администратор', assistant:'Помощник', student:'Ученик', parent:'Родитель' };
 const TEAM_ROLES = { captain:'Капитан', manager:'Менеджер', builder:'Билдер',
                      programmer:'Программист', smm:'SMM', slider:'Дизайнер / слайды' };
 /* роли из годового плана → роли в команде */
@@ -500,6 +500,15 @@ function filterBar(){
 const who = p => [p.cls, p.team, p.category].filter(Boolean).join(' · ');
 const personById = id => S.people.find(p => p.id === id);
 const isStaff = () => S.me && (S.me.role==='admin' || S.me.role==='assistant');
+const isParent = () => S.me && S.me.role === 'parent';
+/* Чьи занятия показываем: ученику — свои, родителю — выбранного ребёнка. */
+function myStudentId(){
+  if(!isParent()) return S.me ? S.me.id : '';
+  const kids = S.me.children || [];
+  if(!S.childId || kids.indexOf(S.childId) < 0) S.childId = kids[0] || '';
+  return S.childId;
+}
+const myStudent = () => personById(myStudentId());
 const isAdmin = () => S.me && S.me.role==='admin';
 
 function reindex(){
@@ -557,6 +566,7 @@ async function loadPhotos(){
 
 /* Фотографии умеет только свежий серверный код. */
 const photosReady = () => (S.version || '') >= '2026-09-16';
+const parentsReady = () => (S.version || '') >= '2026-09-17';
 
 const initials = name => String(name || '').trim().split(/\s+/).slice(0,2)
   .map(w => w.charAt(0)).join('');
@@ -952,10 +962,10 @@ async function boot(){
 function fillRoster(b){
   const sel = document.getElementById('who');
   document.getElementById('gateTitle').textContent = b.groupName || 'Посещаемость кружка';
-  const groups = { admin:[], assistant:[], student:[] };
+  const groups = { admin:[], assistant:[], student:[], parent:[] };
   b.roster.forEach(p => { (groups[p.role] || groups.student).push(p); });
   let html = '<option value="">Выберите имя…</option>';
-  [['student','Ученики'],['assistant','Помощники'],['admin','Администраторы']].forEach(([k,label]) => {
+  [['student','Ученики'],['parent','Родители'],['assistant','Помощники'],['admin','Администраторы']].forEach(([k,label]) => {
     if(!groups[k].length) return;
     html += '<optgroup label="' + label + '">' +
       groups[k].map(p => '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>').join('') +
@@ -1062,6 +1072,7 @@ function tabList(){
     ['calendar','Календарь'], ['plan','План и темы'],
     ...(isAdmin() ? [['settings','Настройки']] : [])
   ];
+  if(isParent()) return [['my','Занятия'], ['myextra','Достижения'], ['calendar','Календарь']];
   return [['my','Мои занятия'], ['myextra','Достижения'],
           ['calendar','Календарь'], ['plan','План и темы']];
 }
@@ -1419,12 +1430,58 @@ function viewPeople(){
           '<input class="in" style="width:auto" type="date" id="bulkSince" value="' + todayStr() + '">' +
           '<button class="btn" data-act="add-bulk">Добавить всех</button></div>' +
       '</details></div>' +
+    parentsBlock() +
     '<div class="sect"><div class="scroll"><table><thead><tr>' +
       '<th>Ученик</th><th>Класс</th><th class="opt">Команда</th><th class="opt">Кат.</th><th class="opt">Роль</th>' +
       '<th class="num">Посещ.</th><th class="num">Проп.</th>' +
       '<th class="num opt">Олимп.</th><th class="num opt">Тем</th><th></th></tr></thead><tbody>' +
       (body || '<tr><td colspan="11" class="muted">Список пуст</td></tr>') + '</tbody></table></div>' +
       '<p class="small muted" style="margin:10px 0 0">Посещаемость и пропуски — за период ' + human(S.from) + ' — ' + human(S.to) + '.</p></div>';
+}
+
+const parents = () => S.people.filter(p => p.role === 'parent')
+  .sort((a,b) => a.name.localeCompare(b.name,'ru'));
+
+function parentsBlock(){
+  if(!isStaff()) return '';
+  if(!parentsReady()) return '';
+  const list = parents();
+  const rows = list.map(p => {
+    const kids = (p.children || []).map(id => {
+      const k = personById(id);
+      return '<span class="chip">' + esc(k ? k.name : '—') + '</span>';
+    }).join(' ') || '<span class="muted small">дети не указаны</span>';
+    return '<tr><td>' + esc(p.name) + (p.active ? '' : ' <span class="chip">архив</span>') + '</td>' +
+      '<td>' + kids + '</td>' +
+      '<td><div class="row" style="gap:6px">' +
+        '<button class="btn sm" data-act="parent-kids" data-id="' + p.id + '">Дети</button>' +
+        '<button class="btn sm" data-act="reset-pin" data-id="' + p.id + '">Новый код</button>' +
+        (isAdmin() ? '<button class="btn sm" data-act="toggle-active" data-id="' + p.id + '">' +
+          (p.active ? 'В архив' : 'Вернуть') + '</button>' : '') +
+      '</div></td></tr>';
+  }).join('');
+
+  return '<div class="sect"><div class="head"><h3>Родители' +
+      (list.length ? ' <span class="muted small">(' + list.length + ')</span>' : '') + '</h3>' +
+      '<button class="btn sm pri" data-act="parent-form">Добавить родителя</button></div>' +
+    (rows ? '<div class="scroll"><table><thead><tr><th>Родитель</th><th>Дети</th><th></th></tr></thead>' +
+            '<tbody>' + rows + '</tbody></table></div>'
+          : '<p class="muted">Пока никого. Родитель входит своим кодом и видит только своего ребёнка: ' +
+            'занятия, пропуски, награды и темы.</p>') + '</div>';
+}
+
+function parentForm(id){
+  const p = id ? personById(id) : null;
+  const chosen = p ? (p.children || []) : [];
+  modal('<h3>' + (p ? 'Дети: ' + esc(p.name) : 'Новый родитель') + '</h3>' +
+    (p ? '' : '<div class="field"><label>Имя родителя</label><input class="in" id="parName" placeholder="Фамилия и имя"></div>') +
+    '<p class="small muted">Отметьте, чьи это дети. Родитель увидит только их.</p>' +
+    '<div class="pick">' + students().map(st =>
+      '<label><input type="checkbox" class="kchk" value="' + st.id + '"' +
+      (chosen.indexOf(st.id) >= 0 ? ' checked' : '') + '>' + esc(st.name) +
+      (st.cls ? ' <span class="muted small">' + esc(st.cls) + '</span>' : '') + '</label>').join('') + '</div>' +
+    '<button class="btn pri" style="margin-top:12px" data-act="parent-save" data-id="' + (id || '') + '">' +
+      (p ? 'Сохранить' : 'Добавить и выдать код') + '</button>');
 }
 
 function viewStudentCard(id){
@@ -1756,8 +1813,8 @@ function viewExtra(){
             '</div>' +
             awardsTable(limitRows(awShown), true) + moreNote(awShown.length, awFull.length) +
           '</details></div>'
-      : '<div class="sect"><h3>Мои награды</h3>' +
-          awardsTable(S.awards.filter(a => a.u === S.me.id)
+      : '<div class="sect"><h3>' + (isParent() ? 'Награды ребёнка' : 'Мои награды') + '</h3>' +
+          awardsTable(S.awards.filter(a => a.u === myStudentId())
             .sort((a,b) => (b.date||'').localeCompare(a.date||'')), false) + '</div>');
 }
 
@@ -2099,6 +2156,7 @@ function viewSettings(){
           '<tr><td>Соревнований в календаре</td><td>' + S.stats.competitions + '</td></tr>' +
           '<tr><td>Пунктов годового плана</td><td>' + S.stats.plan + '</td></tr>' +
           '<tr><td>Фотографий учеников</td><td>' + (S.stats.photos || 0) + '</td></tr>' +
+          '<tr><td>Родителей с доступом</td><td>' + (S.stats.parents || 0) + '</td></tr>' +
           '<tr><td>Достижений школы</td><td>' + (S.stats.school || 0) +
             (!S.stats.school ? ' <span class="chip coral">запустите importSchoolAwards</span>' : '') + '</td></tr>' : '') +
       '</tbody></table></div>' +
@@ -2112,8 +2170,22 @@ function viewSettings(){
 }
 
 /* ================= КАБИНЕТ УЧЕНИКА ================= */
+function childSwitch(){
+  if(!isParent() || (S.me.children || []).length < 2) return '';
+  return '<div class="row" style="margin-bottom:14px"><span class="muted small">Ребёнок</span>' +
+    '<select class="in" style="width:auto" data-act="child">' +
+      (S.me.children || []).map(id => {
+        const p = personById(id);
+        return '<option value="' + id + '"' + (id === myStudentId() ? ' selected' : '') + '>' +
+          esc(p ? p.name : id) + '</option>';
+      }).join('') + '</select></div>';
+}
+
 function viewMy(){
-  const id = S.me.id;
+  const id = myStudentId();
+  const kid = personById(id);
+  if(!id || !kid) return '<div class="sect muted">Ребёнок не привязан к вашей учётной записи. ' +
+    'Попросите руководителя кружка это поправить.</div>';
   const st = statsFor(id, S.from, S.to);
   const ym = S.month, y = Number(ym.slice(0,4)), mo = Number(ym.slice(5,7)) - 1;
   const first = new Date(y, mo, 1), lastDay = new Date(y, mo+1, 0).getDate();
@@ -2129,8 +2201,11 @@ function viewMy(){
       '<b>' + d + '</b>' + (m ? '<span>' + ST[m.s].letter + '</span>' : '') + '</div>';
   }
 
-  return '<div class="head"><h2>Мои занятия</h2>' +
-      '<span class="muted small">' + human(S.from) + ' — ' + human(S.to) + '</span></div>' +
+  return '<div class="head"><div class="avarow">' + avatar(kid, isParent() ? 'big' : '') +
+      '<div><h2 style="margin:0">' + (isParent() ? esc(kid.name) : 'Мои занятия') + '</h2>' +
+      '<div class="muted small">' + (isParent() ? esc(who(kid)) + ' · ' : '') +
+      human(S.from) + ' — ' + human(S.to) + '</div></div></div></div>' +
+    childSwitch() +
     '<div class="cards">' +
       tile(st.percent + '%', '', 'Посещаемость') +
       tile(nf(st.hoursFact), ' ч', 'Посещено из ' + nf(st.hoursPlan) + ' ч') +
@@ -2145,7 +2220,11 @@ function viewMy(){
       '<div class="calendar">' + WD_ORDER.map(i => '<div class="wd">' + WD_SHORT[i] + '</div>').join('') + cells + '</div>' +
       '<div class="legend">' + ['p','l','e','a'].map(s =>
         '<span><i class="dot" style="background:' + stColor(s) + '"></i>' + ST[s].full + '</span>').join('') + '</div></div>' +
-    '<div class="sect"><h3>Мои пропуски</h3>' +
+    (isParent()
+      ? '<div class="sect"><h3>Темы для изучения</h3>' +
+          topicsTable(S.topics.filter(t => t.u === id), false) + '</div>'
+      : '') +
+    '<div class="sect"><h3>' + (isParent() ? 'Пропуски' : 'Мои пропуски') + '</h3>' +
       (st.missDates.length
         ? '<div class="scroll"><table><tbody>' + st.missDates.map(m =>
             '<tr><td>' + human(m.d) + '</td><td>' + WD_SHORT[parseD(m.d).getDay()] + '</td>' +
@@ -2292,6 +2371,26 @@ async function act(a, el, ev){
   case 'open-student': ev.preventDefault(); S.openStudent = el.dataset.id; S.tab = 'people'; render(); break;
   case 'back-people': S.openStudent = ''; render(); break;
   case 'toggle-archive': S.showArchive = !S.showArchive; render(); break;
+  case 'parent-form': parentForm(''); break;
+  case 'parent-kids': parentForm(el.dataset.id); break;
+  case 'parent-save': {
+    const kids = Array.from(document.querySelectorAll('.kchk:checked')).map(x => x.value);
+    if(!kids.length){ say('Отметьте хотя бы одного ребёнка.', 'err'); return; }
+    if(el.dataset.id){
+      const r = await call('savePerson', [S.token, el.dataset.id, { children: kids }], 'Сохранено');
+      if(r.ok){ Object.assign(personById(el.dataset.id), r.v); closeModal(); render(); }
+    } else {
+      const name = val('parName');
+      if(!name){ say('Введите имя родителя.', 'err'); return; }
+      const r = await call('addParent', [S.token, name, kids]);
+      if(r.ok){
+        S.people.push(r.v.person);
+        closeModal(); render();
+        showPins([{ name: r.v.person.name, pin: r.v.pin }], 'Код для родителя');
+      }
+    }
+    break;
+  }
   case 'add-student': {
     const name = val('newName');
     if(!name){ say('Введите имя.', 'err'); return; }
@@ -2542,7 +2641,8 @@ document.addEventListener('change', ev => {
   const el = ev.target.closest('[data-act]');
   if(!el) return;
   const a = el.dataset.act;
-  if(a === 'f-year'){ S.fYear = el.value; render(); }
+  if(a === 'child'){ S.childId = el.value; render(); }
+  else if(a === 'f-year'){ S.fYear = el.value; render(); }
   else if(a === 'f-team'){ S.fTeam = el.value; render(); }
   else if(a === 'f-cat'){ S.fCat = el.value; render(); }
   else if(a === 'tp-target'){

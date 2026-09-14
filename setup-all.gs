@@ -29,7 +29,7 @@
  *  Установка описана в attendance/README.md
  *************************************************************/
 
-var VERSION = '2026-09-16';         // метка версии кода: видна в ответе сервера
+var VERSION = '2026-09-17';         // метка версии кода: видна в ответе сервера
 var SHEET_ID = '';                    // пусто = скрипт привязан к таблице
 var FIRST_ADMIN_NAME = 'Администратор';
 var SESSION_DAYS = 90;                // сколько дней держится вход
@@ -38,7 +38,7 @@ var LOCK_MINUTES = 15;                // на сколько блокирует�
 
 var SHEETS = {
   people:   ['id','role','name','pinHash','salt','active','since','createdAt','failCount','lockUntil','note',
-             'cls','team','category','teamRole','birth'],
+             'cls','team','category','teamRole','birth','children'],
   marks:    ['id','date','studentId','status','hours','note','updatedAt','updatedBy'],
   settings: ['key','value'],
   sessions: ['token','personId','createdAt','expiresAt'],
@@ -230,7 +230,9 @@ function personPub_(p) {
     since: looseDate_(p.since), createdAt: dstr_(p.createdAt), note: String(p.note || ''),
     cls: String(p.cls || ''), team: String(p.team || ''),
     category: String(p.category || ''), teamRole: String(p.teamRole || ''),
-    birth: looseDate_(p.birth)
+    birth: looseDate_(p.birth),
+    children: String(p.children || '').split(',').map(function (x) { return x.trim(); })
+      .filter(function (x) { return x; })
   };
 }
 
@@ -253,7 +255,8 @@ function createPerson_(role, name, pin, since, extra) {
     failCount: 0, lockUntil: '', note: String(extra.note || ''),
     cls: String(extra.cls || ''), team: String(extra.team || ''),
     category: String(extra.category || ''), teamRole: String(extra.teamRole || ''),
-    birth: dstr_(extra.birth)
+    birth: dstr_(extra.birth),
+    children: (extra.children || []).join(',')
   };
   append_('people', row);
   dropBootCache_();
@@ -285,6 +288,10 @@ function auth_(token) {
 
 function requireStaff_(p) {
   if (p.role !== 'admin' && p.role !== 'assistant') throw new Error('Недостаточно прав.');
+}
+function childrenOf_(p) {
+  return String(p.children || '').split(',').map(function (x) { return x.trim(); })
+    .filter(function (x) { return x; });
 }
 function requireAdmin_(p) {
   if (p.role !== 'admin') throw new Error('Это может сделать только администратор.');
@@ -344,6 +351,23 @@ function stateFor_(person) {
   var settings = readSettings_();
   var people = rows_('people').map(personPub_);
   var me = personPub_(person);
+
+  if (person.role === 'parent') {
+    var kids = childrenOf_(person);
+    var mine = people.filter(function (x) { return kids.indexOf(x.id) >= 0; });
+    var marks = marksPub_(rows_('marks')).filter(function (m) { return kids.indexOf(m.u) >= 0; });
+    var photos = photoMap_(), myPhotos = {};
+    kids.forEach(function (id) { if (photos[id]) myPhotos[id] = photos[id]; });
+    return {
+      me: me, settings: settings, people: mine, marks: marks,
+      awards: awardsPub_(rows_('awards')).filter(function (a) { return kids.indexOf(a.u) >= 0; }),
+      topics: topicsPub_(rows_('topics')).filter(function (t) { return kids.indexOf(t.u) >= 0; }),
+      school: rows_('school').map(schoolPub_),
+      clubAwards: clubAwards_(people),
+      photoMap: myPhotos,
+      version: VERSION
+    };
+  }
   if (person.role === 'student') {
     return {
       me: me, settings: settings,
@@ -372,7 +396,8 @@ function stateFor_(person) {
              withBirth: withBirth, awards: rows_('awards').length,
              competitions: settings.competitions.length, plan: settings.plan.length,
              school: rows_('school').length,
-             photos: Object.keys(photoMap_()).length }
+             photos: Object.keys(photoMap_()).length,
+             parents: people.filter(function (x) { return x.role === 'parent' && x.active; }).length }
   };
 }
 
@@ -510,6 +535,19 @@ API.addStudents = function (token, names, since, extra) {
   return out;
 };
 
+/** Родитель: свой код, видит только своих детей. */
+API.addParent = function (token, name, childIds) {
+  var p = auth_(token); requireStaff_(p);
+  var kids = (childIds || []).map(String).filter(function (id) {
+    var c = findPerson_(id);
+    return c && c.role === 'student';
+  });
+  if (!kids.length) throw new Error('Выберите хотя бы одного ребёнка.');
+  var pin = genPin_(4);
+  var row = createPerson_('parent', name, pin, today_(), { children: kids });
+  return { person: personPub_(row), pin: pin };
+};
+
 API.addStaff = function (token, name, role) {
   var p = auth_(token); requireAdmin_(p);
   if (role !== 'admin' && role !== 'assistant') throw new Error('Роль должна быть admin или assistant.');
@@ -531,6 +569,12 @@ API.savePerson = function (token, id, patch) {
   if (patch.since !== undefined) out.since = dstr_(patch.since);
   if (patch.note !== undefined) out.note = String(patch.note);
   if (patch.birth !== undefined) out.birth = dstr_(patch.birth);
+  if (patch.children !== undefined) {
+    out.children = (patch.children || []).map(String).filter(function (id) {
+      var c = findPerson_(id);
+      return c && c.role === 'student';
+    }).join(',');
+  }
   ['cls', 'team', 'category', 'teamRole'].forEach(function (k) {
     if (patch[k] !== undefined) out[k] = String(patch[k]).trim();
   });
@@ -538,7 +582,7 @@ API.savePerson = function (token, id, patch) {
     requireAdmin_(p);
     if (patch.active !== undefined) out.active = patch.active ? 1 : 0;
     if (patch.role !== undefined) {
-      if (['admin', 'assistant', 'student'].indexOf(patch.role) < 0) throw new Error('Неизвестная роль.');
+      if (['admin', 'assistant', 'student', 'parent'].indexOf(patch.role) < 0) throw new Error('Неизвестная роль.');
       out.role = patch.role;
     }
   }
@@ -553,8 +597,8 @@ API.resetPin = function (token, id) {
   var p = auth_(token); requireStaff_(p);
   var t = findPerson_(id);
   if (!t) throw new Error('Участник не найден.');
-  if (t.role !== 'student') requireAdmin_(p);
-  var pin = genPin_(t.role === 'student' ? 4 : 6);
+  if (t.role !== 'student' && t.role !== 'parent') requireAdmin_(p);
+  var pin = genPin_(t.role === 'student' || t.role === 'parent' ? 4 : 6);
   var salt = rndStr_(12);
   update_('people', t._row, { salt: salt, pinHash: hashPin_(pin, salt), failCount: 0, lockUntil: '' });
   return { id: String(t.id), pin: pin };
