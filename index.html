@@ -370,7 +370,7 @@ img.ava{display:block}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-18';
+const SITE_BUILD = '2026-09-18-2';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
@@ -384,6 +384,7 @@ const LS = {
   del(k){ try { localStorage.removeItem(k); } catch(e){} }
 };
 const K_API='attApi', K_TOKEN='attToken', K_CACHE='attCache', K_THEME='attTheme', K_ROSTER='attRoster';
+const K_WARN='attWarnHidden';
 
 /* ================= словари ================= */
 const WD_SHORT = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
@@ -1078,6 +1079,9 @@ function tabList(){
           ['calendar','Календарь'], ['plan','План и темы']];
 }
 
+const warnHideBtn = () => ' <button class="btn sm" data-act="warn-hide" ' +
+  'style="margin-left:8px">Понятно, скрыть</button>';
+
 let versionAsked = false, versionKnown = false;
 function versionWarning(){
   if(!S.fresh) return '';            // пока показываем сохранённую копию — судить о сервере рано
@@ -1091,12 +1095,13 @@ function versionWarning(){
     return '';
   }
   if(!v && !versionKnown) return '';  // ответа ещё нет
+  if(LS.get(K_WARN) === (v || 'нет')) return '';   // эту полосу уже закрыли
   if(!v) return '<div class="msg warn">Серверный код устарел (в нём нет даже метки версии). ' +
     'Обновите Code.gs в Apps Script и выпустите новую версию развёртывания, иначе часть ' +
-    'возможностей не заработает. <span class="small">(сборка сайта ' + SITE_BUILD + ')</span></div>';
+    'возможностей не заработает. <span class="small">(сборка сайта ' + SITE_BUILD + ')</span>' + warnHideBtn() + '</div>';
   if(v < NEED_VERSION) return '<div class="msg warn">Серверный код старее сайта: ' + esc(v) +
     ', нужен ' + NEED_VERSION + '. Обновите Code.gs в Apps Script и выпустите новую версию ' +
-    'развёртывания — тогда заработают фотографии учеников.</div>';
+    'развёртывания — тогда заработают фотографии, родители и письма.' + warnHideBtn() + '</div>';
   return '';
 }
 
@@ -2578,6 +2583,7 @@ async function act(a, el, ev){
   }
 
   case 'go-calendar': S.tab = 'calendar'; S.openStudent = ''; render(); break;
+  case 'warn-hide': LS.set(K_WARN, S.version || 'нет'); render(); break;
   case 'hard-reload': hardReload(); break;
   case 'mail-save': {
     const on = document.getElementById('mailOn').checked;
