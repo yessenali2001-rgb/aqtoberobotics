@@ -374,7 +374,7 @@ img.ava{display:block}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-21';
+const SITE_BUILD = '2026-09-22';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
@@ -890,6 +890,18 @@ async function hardReload(){
 }
 
 function handleStale(where){
+  /* 404 означает: адрес, по которому мы только что стучались, мёртв.
+     Чаще всего это адрес, сохранённый в этом браузере через настройки, —
+     развёртывание удалили, а запись осталась. Тогда возвращаемся на тот,
+     что зашит в страницу: обычно он живой. */
+  const saved = LS.get(K_API) || '';
+  if(saved && DEFAULT_API_URL && saved !== DEFAULT_API_URL){
+    LS.del(K_API);
+    location.reload();
+    return;
+  }
+  /* Мёртв и встроенный адрес. Возможно, у человека открыта старая копия
+     страницы — один раз перезагружаемся начисто и пробуем снова. */
   let once = null;
   try { once = sessionStorage.getItem(K_RELOADED); } catch(e){}
   if(!once){
@@ -898,8 +910,10 @@ function handleStale(where){
     return;
   }
   const el = document.getElementById(where || 'banner');
-  if(el) el.innerHTML = '<div class="msg err">У вас открыта старая копия страницы, а её сервер удалён. ' +
-    '<button class="btn sm" data-act="hard-reload" style="margin-left:8px">Обновить приложение</button></div>';
+  if(el) el.innerHTML = '<div class="msg err">Сервер не отвечает: развёртывание Apps Script удалено или заменено на новое. ' +
+    'Если вы делали новое развёртывание, введите его адрес. ' +
+    '<button class="btn sm" data-act="hard-reload" style="margin-left:8px">Обновить приложение</button> ' +
+    '<button class="btn sm" data-act="change-api" style="margin-left:8px">Ввести адрес сервера</button></div>';
 }
 
 /* ================= тема ================= */
