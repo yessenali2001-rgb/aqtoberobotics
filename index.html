@@ -374,7 +374,7 @@ img.ava{display:block}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-25';
+const SITE_BUILD = '2026-09-26';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
@@ -384,8 +384,8 @@ const NEED_VERSION = '2026-09-25';
    остался сохранён в браузере, молча возвращаемся на нынешний. */
 const RETIRED_API = ['AKfycby8pKX61', 'AKfycbz4BFaryk', 'AKfycbwPnFU1',
                      'AKfycbzyRJx4', 'AKfycbxSMHVsP', 'AKfycbwTUYTl',
-                     'AKfycbwCP0Ke'];
-const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbzGGLz1hTXNvDu3ZJY-b1d4axkc4xbQUZw7RjuKFgLPiMX62DrOk5GyJsTd3WjBhGg8/exec';
+                     'AKfycbwCP0Ke', 'AKfycbzGGLz1'];
+const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbz21AI6Z2jS9R93PIXhr3mUkI6ftOBeWOk0_U6jwEwghR8ga30d7rGF46bqsASQMRv5/exec';
 
 const LS = {
   get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } },
