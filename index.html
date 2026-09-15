@@ -40,6 +40,10 @@ button,input,select,textarea{font:inherit; color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--blue); outline-offset:2px}
 .hide{display:none !important}
+/* Поле выбора файла нельзя прятать через display:none: Safari на iPhone
+   тогда просто не открывает выбор фотографии. Убираем его с глаз иначе. */
+.filepick{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;
+          clip:rect(0 0 0 0);border:0;padding:0;margin:-1px}
 h1,h2,h3{letter-spacing:-.02em; margin:0}
 a{color:var(--blue)}
 
@@ -357,7 +361,7 @@ img.ava{display:block}
   </div>
 </div>
 
-<input type="file" id="photoFile" accept="image/*" class="hide">
+<input type="file" id="photoFile" accept="image/*" class="filepick">
 <div id="sync" class="sync hide">Сохраняем…</div>
 <div id="modal"></div>
 
@@ -370,7 +374,7 @@ img.ava{display:block}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-20';
+const SITE_BUILD = '2026-09-21';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
@@ -603,7 +607,9 @@ function resizePhoto(file, side, quality){
       URL.revokeObjectURL(url);
       resolve(c.toDataURL('image/jpeg', quality));
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Не удалось открыть файл.')); };
+    img.onerror = () => { URL.revokeObjectURL(url);
+      reject(new Error('Браузер не смог открыть эту картинку. Попробуйте другую — '
+        + 'или сделайте снимок камерой прямо сейчас.')); };
     img.src = url;
   });
 }
