@@ -370,13 +370,17 @@ img.ava{display:block}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-19';
+const SITE_BUILD = '2026-09-20';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
 const NEED_VERSION = '2026-09-18';
 
-const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycby8pKX61ElEv1d5koPQC3_ErK9aYHmlS24UqFCFwZtWo5e8y-TmdJSs1Rk4ipOBTz76/exec';
+/* Прошлые развёртывания сервера: они больше не отвечают. Если такой адрес
+   остался сохранён в браузере, молча возвращаемся на нынешний. */
+const RETIRED_API = ['AKfycby8pKX61', 'AKfycbz4BFaryk', 'AKfycbwPnFU1',
+                     'AKfycbzyRJx4', 'AKfycbxSMHVsP', 'AKfycbwTUYTl'];
+const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbwCP0KeCf9ju7dcIxg4yt1Zl1ttRebRawhVlFGx-9Y3o5n901tQgO9ryGDyWCs67Bjd/exec';
 
 const LS = {
   get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } },
@@ -941,7 +945,9 @@ function splash(on){
 
 async function boot(){
   setTheme(LS.get(K_THEME) === 'dark');
-  S.api = LS.get(K_API) || DEFAULT_API_URL;
+  let savedApi = LS.get(K_API) || '';
+  if(savedApi && RETIRED_API.some(id => savedApi.indexOf(id) >= 0)){ LS.del(K_API); savedApi = ''; }
+  S.api = savedApi || DEFAULT_API_URL;
   if(!S.api){ show('setup'); return; }
   S.token = LS.get(K_TOKEN) || '';
   if(S.token){
