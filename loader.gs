@@ -13,7 +13,8 @@
  *   4. Развернуть → Управление развёртываниями → карандаш на строке
  *      «Веб-приложение» → Версия: Новая → Развернуть.
  *
- *  Всё. Больше сюда заходить не придётся.
+ *  Если что-то не вышло — запустите checkInternet: она честно скажет,
+ *  пускает ли Google этот скрипт в интернет и что отвечают адреса.
  *
  *  ЧЕСТНО О РИСКЕ: сервер будет выполнять код из вашего репозитория
  *  на GitHub автоматически. Репозиторий ваш. Если кто-то получит к нему
@@ -22,7 +23,11 @@
  *  и сохранить — сервер продолжит работать на последней рабочей копии.
  *************************************************************/
 
-var CODE_URL  = 'https://raw.githubusercontent.com/yessenali2001-rgb/aqtoberobotics/main/Code.gs';
+/* Два адреса одного и того же файла: если первый недоступен, берём второй. */
+var CODE_URLS = [
+  'https://raw.githubusercontent.com/yessenali2001-rgb/aqtoberobotics/main/Code.gs',
+  'https://yessenali2001-rgb.github.io/aqtoberobotics/Code.gs'
+];
 var CODE_TTL  = 300;        // секунд держим скачанное в памяти (5 минут)
 var SAFE_MODE = false;      // true — не ходить в интернет, работать на сохранённой копии
 
@@ -54,37 +59,63 @@ function make_(src, fnName) {
     '(function(){ throw new Error("В коде нет функции ' + fnName + '"); })();');
 }
 
-/** Код годится, только если он похож на наш и вообще собирается. */
-function looksValid_(src) {
-  if (!src || src.length < 5000) return false;
-  if (src.indexOf('function doGet') < 0 || src.indexOf('var VERSION') < 0) return false;
-  try { make_(src, 'doGet'); return true; } catch (e) { return false; }
+/** Пусто — код годится. Иначе — причина отказа человеческими словами. */
+function whyBad_(src) {
+  if (!src) return 'пустой ответ';
+  if (src.length < 5000) return 'слишком короткий: ' + src.length + ' знаков, ждём больше 5000';
+  if (src.indexOf('function doGet') < 0) return 'нет функции doGet — скачалась не та страница';
+  if (src.indexOf('var VERSION') < 0) return 'нет метки версии';
+  try { make_(src, 'doGet'); } catch (e) { return 'не собирается: ' + errText_(e); }
+  return '';
 }
 
-function fetchCode_() {
+function looksValid_(src) { return !whyBad_(src); }
+
+function errText_(e) { return (e && e.message) ? e.message : String(e); }
+
+/**
+ * Достаёт код: память → интернет → запасная копия.
+ * В log (массив) складывает, что именно произошло, — это читает updateNow.
+ */
+function fetchCode_(log) {
+  log = log || [];
   var cache = null;
   try { cache = CacheService.getScriptCache(); } catch (e) {}
+
   if (cache && !SAFE_MODE) {
     var hit = cache.get('src');
-    if (hit) return hit;
+    if (hit) { log.push('Взят из памяти (держим ' + CODE_TTL + ' секунд).'); return hit; }
   }
-  if (!SAFE_MODE) {
-    try {
-      var res = UrlFetchApp.fetch(CODE_URL + '?t=' + Date.now(),
-        { muteHttpExceptions: true, followRedirects: true });
-      if (res.getResponseCode() === 200) {
+
+  if (SAFE_MODE) {
+    log.push('SAFE_MODE = true — в интернет не ходим.');
+  } else {
+    for (var i = 0; i < CODE_URLS.length; i++) {
+      var url = CODE_URLS[i];
+      try {
+        var res  = UrlFetchApp.fetch(url + '?t=' + Date.now(),
+                     { muteHttpExceptions: true, followRedirects: true });
+        var code = res.getResponseCode();
+        if (code !== 200) { log.push('нет: ' + url + ' — ответ ' + code); continue; }
+
         var src = res.getContentText();
-        if (looksValid_(src)) {
-          if (cache) { try { cache.put('src', src, CODE_TTL); } catch (e) {} }
-          saveBackup_(src);
-          return src;
-        }
+        var bad = whyBad_(src);
+        if (bad) { log.push('нет: ' + url + ' — скачалось, но ' + bad); continue; }
+
+        log.push('да: ' + url + ' — ' + Math.round(src.length / 1024) + ' КБ');
+        if (cache) { try { cache.put('src', src, CODE_TTL); } catch (e) {} }
+        try { saveBackup_(src); }
+        catch (e) { log.push('   запасную копию сохранить не вышло: ' + errText_(e)); }
+        return src;
+      } catch (e) {
+        log.push('нет: ' + url + ' — ' + errText_(e));
       }
-    } catch (e) {}       // нет связи или GitHub недоступен — идём на запасную копию
+    }
   }
+
   var backup = loadBackup_();
-  if (!backup) throw new Error('Код ещё не загружен. Запустите функцию updateNow.');
-  return backup;
+  if (backup) { log.push('Взята запасная копия из свойств проекта.'); return backup; }
+  throw new Error('Код не загружен, и запасной копии нет.\n' + log.join('\n'));
 }
 
 /** Выполнить функцию из загруженного кода. Если он вдруг сломан — берём запасную копию. */
@@ -107,14 +138,49 @@ function doGet(e)  { return run_('doGet',  [e]); }
 function doPost(e) { return run_('doPost', [e]); }
 
 /* ---------- то, что запускают руками ---------- */
+function tell_(msg) {
+  Logger.log(msg);
+  try { SpreadsheetApp.getUi().alert(msg); } catch (e) {}   // из редактора окна нет — это нормально
+  return msg;
+}
+
 function updateNow() {
   try { CacheService.getScriptCache().remove('src'); } catch (e) {}
-  var src = fetchCode_();
-  var v = (src.match(/var VERSION = '([^']+)'/) || [])[1] || 'без метки';
-  var msg = 'Код обновлён. Версия: ' + v + '\nРазмер: ' + Math.round(src.length / 1024) + ' КБ';
-  Logger.log(msg);
-  try { SpreadsheetApp.getUi().alert(msg); } catch (e) {}
-  return msg;
+  var log = [];
+  try {
+    var src = fetchCode_(log);
+    var v = (src.match(/var VERSION = '([^']+)'/) || [])[1] || 'без метки';
+    return tell_('Код на месте. Версия: ' + v +
+                 '\nРазмер: ' + Math.round(src.length / 1024) + ' КБ\n\n' + log.join('\n'));
+  } catch (e) {
+    return tell_(
+      'НЕ ПОЛУЧИЛОСЬ.\n\n' + errText_(e) +
+      '\n\nЧастые причины:\n' +
+      '1. Не выданы разрешения. Запустите updateNow ещё раз и пройдите все окна\n' +
+      '   до кнопки «Разрешить» («Дополнительные настройки» → «Перейти к проекту»).\n' +
+      '2. Аккаунт школьный или рабочий, и администратор запретил скриптам выходить\n' +
+      '   в интернет. Признак — в строках выше слова про доступ к сервису.\n' +
+      '   Тогда переносите проект в личный аккаунт Google.\n' +
+      '3. Адреса недоступны. Откройте их в браузере: они должны показать текст кода.');
+  }
+}
+
+/** Отдельная проверка: пускают ли этот скрипт в интернет и что отвечают адреса. */
+function checkInternet() {
+  var out = [];
+  for (var i = 0; i < CODE_URLS.length; i++) {
+    try {
+      var r = UrlFetchApp.fetch(CODE_URLS[i] + '?t=' + Date.now(), { muteHttpExceptions: true });
+      var t = r.getContentText();
+      out.push(CODE_URLS[i] + '\n   ответ ' + r.getResponseCode() + ', ' + t.length + ' знаков' +
+               (whyBad_(t) ? ', но ' + whyBad_(t) : ', код годится'));
+    } catch (e) {
+      out.push(CODE_URLS[i] + '\n   ' + errText_(e));
+    }
+  }
+  var pr = PropertiesService.getScriptProperties();
+  out.push('Запасная копия: ' + (Number(pr.getProperty('srcN') || 0) ? 'есть' : 'нет'));
+  return tell_(out.join('\n\n'));
 }
 
 function showVersion()        { return updateNow(); }
