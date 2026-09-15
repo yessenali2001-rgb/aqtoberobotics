@@ -10,7 +10,7 @@
  *  Установка описана в attendance/README.md
  *************************************************************/
 
-var VERSION = '2026-09-18';         // метка версии кода: видна в ответе сервера
+var VERSION = '2026-09-22';         // метка версии кода: видна в ответе сервера
 var SHEET_ID = '';                    // пусто = скрипт привязан к таблице
 var FIRST_ADMIN_NAME = 'Администратор';
 var SESSION_DAYS = 90;                // сколько дней держится вход
@@ -26,7 +26,7 @@ var SHEETS = {
   awards:   ['id','studentId','date','title','subject','level','result','note','updatedAt','updatedBy'],
   topics:   ['id','studentId','subject','title','status','due','note','updatedAt','updatedBy'],
   school:   ['id','year','category','event','team','award','result','note','updatedAt','updatedBy'],
-  photos:   ['studentId','data','buf','updatedAt','updatedBy']
+  photos:   ['studentId','data','buf','updatedAt','updatedBy','size']
 };
 
 var STATUSES = ['p','l','e','a'];     // был / опоздал / уважительная / пропуск
@@ -641,16 +641,20 @@ API.photoChunk = function (token, studentId, part, total, chunk) {
   if (buf.length > PHOTO_MAX) throw new Error('Фотография слишком большая.');
 
   var last = (part + 1 >= total);
+  /* size пишем только на последнем куске: пока фотография не собрана целиком,
+     в data лежит прежняя, и её размер менять нельзя. */
   var patch = last
-    ? { data: buf, buf: '', updatedAt: nowIso_(), updatedBy: String(p.name) }
+    ? { data: buf, buf: '', size: buf.length, updatedAt: nowIso_(), updatedBy: String(p.name) }
     : { buf: buf, updatedAt: nowIso_(), updatedBy: String(p.name) };
 
   if (hit) update_('photos', hit._row, patch);
   else {
     patch.studentId = String(studentId);
     if (!patch.data) patch.data = '';
+    if (patch.size === undefined) patch.size = 0;
     append_('photos', patch);
   }
+  _photoMap = null;
   return { got: part + 1, of: total, done: last, size: buf.length };
 };
 
@@ -659,13 +663,17 @@ API.photos = function (token, ids) {
   auth_(token);
   var want = {};
   (ids || []).forEach(function (x) { want[String(x)] = true; });
-  var out = {};
-  rows_('photos').forEach(function (r) {
-    var id = String(r.studentId);
-    if (!want[id]) return;
-    var d = String(r.data || '');
+  var out = {}, sh = sheet_('photos'), n = sh.getLastRow() - 1;
+  if (n < 1) return out;
+  /* Сначала один узкий столбец с номерами, потом — только нужные ячейки.
+     Читать весь лист нельзя: в нём лежат все картинки кружка. */
+  var idcol = sh.getRange(2, 1, n, 1).getValues();
+  for (var i = 0; i < n; i++) {
+    var id = String(idcol[i][0]);
+    if (!id || !want[id]) continue;
+    var d = String(sh.getRange(i + 2, 2).getValue() || '');
     if (d) out[id] = d;
-  });
+  }
   return out;
 };
 
@@ -673,15 +681,46 @@ API.deletePhoto = function (token, studentId) {
   var p = auth_(token); requireStaff_(p);
   var hit = findPhoto_(studentId);
   if (hit) drop_('photos', hit._row);
+  _photoMap = null;
   return true;
 };
 
-/** Кто с фотографией и когда она обновлялась — чтобы браузер знал, что перечитать. */
+/**
+ * Кто с фотографией и когда она обновлялась — чтобы браузер знал, что перечитать.
+ *
+ * Здесь легко посадить сайт: в колонке data лежат сами картинки, и чтение
+ * всего листа тянуло бы их все на каждом запросе. Поэтому читаем только
+ * узкие колонки — номер ученика, дату и размер.
+ */
+var _photoMap = null;
+
 function photoMap_() {
-  var out = {};
-  rows_('photos').forEach(function (r) {
-    if (String(r.data || '')) out[String(r.studentId)] = dstr_(r.updatedAt) || '1';
-  });
+  if (_photoMap) return _photoMap;
+  var out = {}, sh = sheet_('photos'), n = sh.getLastRow() - 1;
+  if (n < 1) { _photoMap = out; return out; }
+
+  var idcol = sh.getRange(2, 1, n, 1).getValues();
+  var meta  = sh.getRange(2, 4, n, 3).getValues();   // updatedAt, updatedBy, size
+  var older = [];
+
+  for (var i = 0; i < n; i++) {
+    var id = String(idcol[i][0]);
+    if (!id) continue;
+    var raw = meta[i][2];
+    if (raw === '' || raw === null || raw === undefined) { older.push(i); continue; }
+    if (num_(raw, 0) > 0) out[id] = dstr_(meta[i][0]) || '1';
+  }
+
+  /* Строки от прошлой версии: размер неизвестен. Читаем их картинки один раз
+     и проставляем размер, чтобы больше сюда не возвращаться. */
+  for (var k = 0; k < older.length; k++) {
+    var j = older[k], len = String(sh.getRange(j + 2, 2).getValue() || '').length;
+    sh.getRange(j + 2, 6).setValue(len);
+    if (len) out[String(idcol[j][0])] = dstr_(meta[j][0]) || '1';
+  }
+  if (older.length) forget_('photos');
+
+  _photoMap = out;
   return out;
 }
 
