@@ -370,7 +370,7 @@ img.ava{display:block}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-18-2';
+const SITE_BUILD = '2026-09-19';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
@@ -843,7 +843,7 @@ function say(text, kind, where){
   if(!el) return;
   el.innerHTML = text ? '<div class="msg ' + (kind||'ok') + '">' + esc(text) + '</div>' : '';
   if(text && kind !== 'err') setTimeout(() => { if(el.textContent.indexOf(text) >= 0) el.innerHTML = ''; }, 4000);
-  if(text) window.scrollTo({ top:0, behavior:'smooth' });
+  if(text && window.scrollY < 200) window.scrollTo({ top:0, behavior:'smooth' });
 }
 
 async function call(fn, args, okMsg){
@@ -1120,9 +1120,15 @@ function render(){
     extra: viewExtra, calendar: viewCalendar, plan: viewPlan,
     settings: viewSettings, my: viewMy, myextra: viewMyExtra
   }[S.tab];
+  const keepY = window.scrollY;
   v.innerHTML = fn ? fn() : '';
-  window.scrollTo({ top:0 });
+  if(scrollNext){ scrollNext = false; window.scrollTo({ top:0 }); }
+  else window.scrollTo({ top: keepY });     // остаёмся там, где читали
 }
+
+/* Наверх перематываем только когда человек сам перешёл в другой раздел. */
+let scrollNext = false;
+const toTop = () => { scrollNext = true; };
 
 /* ================= ЖУРНАЛ ДНЯ ================= */
 function viewDay(){
@@ -2396,8 +2402,8 @@ async function act(a, el, ev){
   }
 
   /* --- ученики --- */
-  case 'open-student': ev.preventDefault(); S.openStudent = el.dataset.id; S.tab = 'people'; render(); break;
-  case 'back-people': S.openStudent = ''; render(); break;
+  case 'open-student': ev.preventDefault(); S.openStudent = el.dataset.id; S.tab = 'people'; toTop(); render(); break;
+  case 'back-people': S.openStudent = ''; toTop(); render(); break;
   case 'toggle-archive': S.showArchive = !S.showArchive; render(); break;
   case 'parent-form': parentForm(''); break;
   case 'parent-kids': parentForm(el.dataset.id); break;
@@ -2582,7 +2588,7 @@ async function act(a, el, ev){
     break;
   }
 
-  case 'go-calendar': S.tab = 'calendar'; S.openStudent = ''; render(); break;
+  case 'go-calendar': S.tab = 'calendar'; S.openStudent = ''; toTop(); render(); break;
   case 'warn-hide': LS.set(K_WARN, S.version || 'нет'); render(); break;
   case 'hard-reload': hardReload(); break;
   case 'mail-save': {
@@ -2663,7 +2669,7 @@ async function putMark(ds, uid, status, hours, note){
 
 document.addEventListener('click', ev => {
   const tabEl = ev.target.closest('[data-tab]');
-  if(tabEl){ S.tab = tabEl.dataset.tab; S.openStudent = ''; S.q = ''; render(); return; }
+  if(tabEl){ S.tab = tabEl.dataset.tab; S.openStudent = ''; S.q = ''; toTop(); render(); return; }
   const el = ev.target.closest('[data-act]');
   if(el) act(el.dataset.act, el, ev);
 });
