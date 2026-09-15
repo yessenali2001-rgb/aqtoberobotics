@@ -374,11 +374,11 @@ img.ava{display:block}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-24';
+const SITE_BUILD = '2026-09-25';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
-const NEED_VERSION = '2026-09-18';
+const NEED_VERSION = '2026-09-25';
 
 /* Прошлые развёртывания сервера: они больше не отвечают. Если такой адрес
    остался сохранён в браузере, молча возвращаемся на нынешний. */
@@ -583,6 +583,73 @@ const srvAtLeast = v => !S.fresh || (S.version || '') >= v;
 const photosReady = () => srvAtLeast('2026-09-16');
 const parentsReady = () => srvAtLeast('2026-09-17');
 const mailReady = () => srvAtLeast('2026-09-18');
+const phonesReady = () => srvAtLeast('2026-09-25');
+
+/* ---- сообщения родителям в WhatsApp ----
+   Рассылать с обычного номера WhatsApp не разрешает — за это блокируют.
+   Поэтому сайт готовит текст и открывает переписку с родителем, а кнопку
+   «Отправить» нажимает человек. Ничего подключать и оплачивать не нужно. */
+const WA_WORDS = { a:'пропустил занятие', l:'опоздал', e:'отсутствовал по уважительной причине' };
+
+/* wa.me принимает только цифры с кодом страны. Пишут по-разному:
+   +7 707…, 8 707…, 7071234567 — приводим к одному виду.
+
+   Отличить неполный номер от правильного нельзя: 10 цифр могут быть и
+   казахстанским номером без кода страны, и обрезанным. Поэтому рядом с
+   кнопкой показываем, куда именно уйдёт сообщение, — ошибку видно до
+   отправки, а отправляет всё равно человек. */
+function waDigits(phone){
+  let d = String(phone || '').replace(/\D/g, '');
+  if(d.length === 11 && d[0] === '8') d = '7' + d.slice(1);
+  else if(d.length === 10 && d[0] === '7') d = '7' + d;
+  return d.length === 11 ? d : '';
+}
+
+function waText(ds, items){
+  return 'Здравствуйте! Кружок «' + (S.settings.groupName || '') + '», сводка за ' + human(ds) + ':\n\n' +
+    items.map(i => '• ' + i.name + ' — ' + WA_WORDS[i.s]).join('\n') +
+    '\n\nПодробности в кабинете родителя: ' + (S.settings.siteUrl || '') +
+    '\n\nЕсли причина уважительная, сообщите руководителю кружка.';
+}
+
+const waLink = (digits, text) => 'https://wa.me/' + digits + '?text=' + encodeURIComponent(text);
+
+/** Кому написать про пропуски этого дня. Пусто, если писать не о чем. */
+function notifyBlock(ds){
+  if(!isStaff() || !parentsReady()) return '';
+  const miss = {};
+  S.people.forEach(p => {
+    if(p.role !== 'student') return;
+    const m = markOf(ds, p.id);
+    if(m && (m.s === 'a' || m.s === 'l' || m.s === 'e')) miss[p.id] = m;
+  });
+  if(!Object.keys(miss).length) return '';
+
+  let noPhone = 0;
+  const rows = parents().filter(par => par.active).map(par => {
+    const items = (par.children || []).filter(id => miss[id])
+      .map(id => ({ name: (personById(id) || {}).name || '', s: miss[id].s }));
+    if(!items.length) return '';
+    const d = waDigits(par.phone);
+    if(!d) noPhone++;
+    return '<tr><td>' + esc(par.name) + '</td>' +
+      '<td class="small">' + items.map(i => esc(i.name) + ' — ' + WA_WORDS[i.s]).join('<br>') + '</td>' +
+      '<td>' + (d
+        ? '<a class="btn sm pri" target="_blank" rel="noopener" href="' +
+            esc(waLink(d, waText(ds, items))) + '">Написать</a>' +
+          '<div class="muted small" style="margin-top:4px">+' + esc(d) + '</div>'
+        : '<span class="muted small">' +
+            (par.phone ? 'номер непонятен: ' + esc(par.phone) : 'нет номера') + '</span>') +
+      '</td></tr>';
+  }).filter(Boolean).join('');
+
+  if(!rows) return '';
+  return '<div class="sect"><h3>Сообщить родителям</h3>' +
+    '<p class="small muted" style="margin:0 0 10px">Нажмите «Написать» — откроется WhatsApp ' +
+      'с готовым текстом на номер родителя. Останется нажать «Отправить».' +
+      (noPhone ? ' Кому-то номер ещё не вписан: «Ученики» → «Родители».' : '') + '</p>' +
+    '<div class="scroll"><table><tbody>' + rows + '</tbody></table></div></div>';
+}
 
 const initials = name => String(name || '').trim().split(/\s+/).slice(0,2)
   .map(w => w.charAt(0)).join('');
@@ -1213,6 +1280,7 @@ function viewDay(){
       (later ? '<p class="small muted" style="margin:10px 0 0">' + later + ' ученик(ов) зачислены позже этой даты и здесь не показаны.</p>' : '') +
       '<ul class="plist" style="margin-top:12px">' + rows + '</ul>' +
     '</div>' +
+    notifyBlock(ds) +
     '<div class="legend">' + ['p','l','e','a'].map(s =>
       '<span><i class="dot" style="background:' + stColor(s) + '"></i>' + ST[s].full + '</span>').join('') + '</div>';
 }
@@ -1499,6 +1567,7 @@ function parentsBlock(){
       '<td>' + kids + '</td>' +
       '<td class="muted small opt">' + (p.email ? esc(p.email) :
         (S.settings.mailEnabled === '1' ? '<span style="color:var(--coral)">нет адреса</span>' : '—')) + '</td>' +
+      '<td class="muted small opt">' + (p.phone ? esc(p.phone) : '—') + '</td>' +
       '<td><div class="row" style="gap:6px">' +
         '<button class="btn sm" data-act="parent-kids" data-id="' + p.id + '">Дети</button>' +
         '<button class="btn sm" data-act="reset-pin" data-id="' + p.id + '">Новый код</button>' +
@@ -1511,7 +1580,7 @@ function parentsBlock(){
       (list.length ? ' <span class="muted small">(' + list.length + ')</span>' : '') + '</h3>' +
       '<button class="btn sm pri" data-act="parent-form">Добавить родителя</button></div>' +
     (rows ? '<div class="scroll"><table><thead><tr><th>Родитель</th><th>Дети</th>' +
-            '<th class="opt">Email</th><th></th></tr></thead>' +
+            '<th class="opt">Email</th><th class="opt">WhatsApp</th><th></th></tr></thead>' +
             '<tbody>' + rows + '</tbody></table></div>'
           : '<p class="muted">Пока никого. Родитель входит своим кодом и видит только своего ребёнка: ' +
             'занятия, пропуски, награды и темы.</p>') + '</div>';
@@ -1525,6 +1594,9 @@ function parentForm(id){
     '<div class="field"><label>Email для писем о пропусках</label>' +
       '<input class="in" id="parMail" type="email" placeholder="можно оставить пустым" value="' +
       esc(p ? p.email : '') + '"></div>' +
+    (phonesReady() ? '<div class="field"><label>Телефон для WhatsApp</label>' +
+      '<input class="in" id="parPhone" type="tel" placeholder="+7 707 123 45 67" value="' +
+      esc(p ? (p.phone || '') : '') + '"></div>' : '') +
     '<p class="small muted">Отметьте, чьи это дети. Родитель увидит только их.</p>' +
     '<div class="pick">' + students().map(st =>
       '<label><input type="checkbox" class="kchk" value="' + st.id + '"' +
@@ -2443,13 +2515,15 @@ async function act(a, el, ev){
     const kids = Array.from(document.querySelectorAll('.kchk:checked')).map(x => x.value);
     if(!kids.length){ say('Отметьте хотя бы одного ребёнка.', 'err'); return; }
     if(el.dataset.id){
-      const r = await call('savePerson', [S.token, el.dataset.id,
-        { children: kids, email: val('parMail') }], 'Сохранено');
+      const patch = { children: kids, email: val('parMail') };
+      if(phonesReady()) patch.phone = val('parPhone');
+      const r = await call('savePerson', [S.token, el.dataset.id, patch], 'Сохранено');
       if(r.ok){ Object.assign(personById(el.dataset.id), r.v); closeModal(); render(); }
     } else {
       const name = val('parName');
       if(!name){ say('Введите имя родителя.', 'err'); return; }
-      const r = await call('addParent', [S.token, name, kids, val('parMail')]);
+      const r = await call('addParent', [S.token, name, kids, val('parMail'),
+                                         phonesReady() ? val('parPhone') : '']);
       if(r.ok){
         S.people.push(r.v.person);
         closeModal(); render();

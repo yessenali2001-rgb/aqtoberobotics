@@ -10,7 +10,7 @@
  *  Установка описана в attendance/README.md
  *************************************************************/
 
-var VERSION = '2026-09-22';         // метка версии кода: видна в ответе сервера
+var VERSION = '2026-09-25';         // метка версии кода: видна в ответе сервера
 var SHEET_ID = '';                    // пусто = скрипт привязан к таблице
 var FIRST_ADMIN_NAME = 'Администратор';
 var SESSION_DAYS = 90;                // сколько дней держится вход
@@ -19,7 +19,7 @@ var LOCK_MINUTES = 15;                // на сколько блокирует�
 
 var SHEETS = {
   people:   ['id','role','name','pinHash','salt','active','since','createdAt','failCount','lockUntil','note',
-             'cls','team','category','teamRole','birth','children','email'],
+             'cls','team','category','teamRole','birth','children','email','phone'],
   marks:    ['id','date','studentId','status','hours','note','updatedAt','updatedBy'],
   settings: ['key','value'],
   sessions: ['token','personId','createdAt','expiresAt'],
@@ -217,7 +217,8 @@ function personPub_(p) {
     birth: looseDate_(p.birth),
     children: String(p.children || '').split(',').map(function (x) { return x.trim(); })
       .filter(function (x) { return x; }),
-    email: String(p.email || '').trim()
+    email: String(p.email || '').trim(),
+    phone: String(p.phone || '').trim()
   };
 }
 
@@ -242,7 +243,8 @@ function createPerson_(role, name, pin, since, extra) {
     category: String(extra.category || ''), teamRole: String(extra.teamRole || ''),
     birth: dstr_(extra.birth),
     children: (extra.children || []).join(','),
-    email: String(extra.email || '').trim()
+    email: String(extra.email || '').trim(),
+    phone: String(extra.phone || '').trim()
   };
   append_('people', row);
   dropBootCache_();
@@ -522,7 +524,7 @@ API.addStudents = function (token, names, since, extra) {
 };
 
 /** Родитель: свой код, видит только своих детей. */
-API.addParent = function (token, name, childIds, email) {
+API.addParent = function (token, name, childIds, email, phone) {
   var p = auth_(token); requireStaff_(p);
   var kids = (childIds || []).map(String).filter(function (id) {
     var c = findPerson_(id);
@@ -530,7 +532,8 @@ API.addParent = function (token, name, childIds, email) {
   });
   if (!kids.length) throw new Error('Выберите хотя бы одного ребёнка.');
   var pin = genPin_(4);
-  var row = createPerson_('parent', name, pin, today_(), { children: kids, email: email });
+  var row = createPerson_('parent', name, pin, today_(),
+                          { children: kids, email: email, phone: phone });
   return { person: personPub_(row), pin: pin };
 };
 
@@ -556,6 +559,7 @@ API.savePerson = function (token, id, patch) {
   if (patch.note !== undefined) out.note = String(patch.note);
   if (patch.birth !== undefined) out.birth = dstr_(patch.birth);
   if (patch.email !== undefined) out.email = String(patch.email).trim();
+  if (patch.phone !== undefined) out.phone = String(patch.phone).trim();
   if (patch.children !== undefined) {
     out.children = (patch.children || []).map(String).filter(function (id) {
       var c = findPerson_(id);
