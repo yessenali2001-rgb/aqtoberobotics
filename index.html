@@ -377,11 +377,11 @@ img.ava{display:block}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-27';
+const SITE_BUILD = '2026-09-28';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
-const NEED_VERSION = '2026-09-27';
+const NEED_VERSION = '2026-09-28';
 
 /* Прошлые развёртывания сервера: они больше не отвечают. Если такой адрес
    остался сохранён в браузере, молча возвращаемся на нынешний. */
@@ -588,6 +588,7 @@ const parentsReady = () => srvAtLeast('2026-09-17');
 const mailReady = () => srvAtLeast('2026-09-18');
 const phonesReady = () => srvAtLeast('2026-09-25');
 const alumniReady = () => srvAtLeast('2026-09-27');
+const alumniPhotosReady = () => srvAtLeast('2026-09-28');
 
 /* ---- сообщения родителям в WhatsApp ----
    Рассылать с обычного номера WhatsApp не разрешает — за это блокируют.
@@ -1231,6 +1232,14 @@ function render(){
   v.innerHTML = fn ? fn() : '';
   if(scrollNext){ scrollNext = false; window.scrollTo({ top:0 }); }
   else window.scrollTo({ top: keepY });     // остаёмся там, где читали
+
+  /* Карточка выпускника живёт в отдельном окне и перерисовкой не задета:
+     подменяем только кружок с фотографией, чтобы не стереть набранное. */
+  const ava = document.getElementById('alumAva');
+  if(ava){
+    const a = (S.alumni || []).find(x => x.id === ava.dataset.id);
+    if(a) ava.innerHTML = avatar(a, 'big');
+  }
 }
 
 /* Наверх перематываем только когда человек сам перешёл в другой раздел. */
@@ -2026,7 +2035,8 @@ function viewAlumni(){
     const part = list.filter(a => (a.year || '') === y)
       .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
     const rows = part.map(a => '<tr>' +
-      '<td class="longtext">' + esc(a.name) + '</td>' +
+      '<td class="longtext"><div class="avarow">' + avatar(a) +
+        '<span>' + esc(a.name) + '</span></div></td>' +
       '<td class="longtext">' + placeCell(a) + '</td>' +
       '<td class="opt">' + (a.program ? esc(a.program) : '—') + '</td>' +
       '<td class="opt muted small">' + esc(a.note || '') + '</td>' +
@@ -2057,7 +2067,19 @@ function alumniForm(id){
   const dl = (name, field) => '<datalist id="' + name + '">' +
     uniq((S.alumni || []).map(x => x[field])).map(v =>
       '<option value="' + esc(v) + '">').join('') + '</datalist>';
+  const photoBlock = (a && alumniPhotosReady())
+    ? '<div class="avarow" style="margin-bottom:14px">' +
+        '<span id="alumAva" data-id="' + esc(a.id) + '">' + avatar(a, 'big') + '</span>' +
+        '<div class="row" style="gap:6px">' +
+          '<button class="btn sm" data-act="photo-pick" data-id="' + esc(a.id) + '">' +
+            ((S.photoMap || {})[a.id] ? 'Заменить фото' : 'Добавить фото') + '</button>' +
+          ((S.photoMap || {})[a.id] ? '<button class="btn sm danger" data-act="photo-del" data-id="' +
+            esc(a.id) + '">Убрать</button>' : '') +
+        '</div></div>'
+    : (a ? '' : '<p class="small muted">Фотографию можно добавить после сохранения.</p>');
+
   modal('<h3>' + (a ? 'Изменить выпускника' : 'Новый выпускник') + '</h3>' +
+    photoBlock +
     '<div class="row">' +
       '<div class="field grow"><label>Имя и фамилия</label><input class="in" id="alName" value="' +
         esc(a ? a.name : '') + '" placeholder="Фамилия и имя"></div>' +
@@ -2547,7 +2569,15 @@ async function act(a, el, ev){
     const a = (S.alumni || []).find(x => x.id === el.dataset.id);
     if(!confirm('Удалить запись' + (a ? ' о «' + a.name + '»' : '') + '?')) return;
     const r = await call('deleteAlumnus', [S.token, el.dataset.id], 'Удалено');
-    if(r.ok){ S.alumni = (S.alumni || []).filter(x => x.id !== el.dataset.id); render(); }
+    if(r.ok){
+      S.alumni = (S.alumni || []).filter(x => x.id !== el.dataset.id);
+      /* Фотографию сервер удалил вместе с записью — забываем и у себя,
+         иначе браузер будет снова и снова просить то, чего нет. */
+      delete (S.photoMap || {})[el.dataset.id];
+      delete photoCache[el.dataset.id];
+      LS.del(PHOTO_KEY(el.dataset.id));
+      render();
+    }
     break;
   }
   case 'school-form': schoolForm(el.dataset.id || ''); break;
@@ -2800,7 +2830,8 @@ async function act(a, el, ev){
     document.getElementById('photoFile').click();
     break;
   case 'photo-del': {
-    const p = personById(el.dataset.id);
+    const p = personById(el.dataset.id) ||
+              (S.alumni || []).find(x => x.id === el.dataset.id);
     if(!confirm('Убрать фотографию «' + (p ? p.name : '') + '»?')) return;
     const r = await call('deletePhoto', [S.token, el.dataset.id], 'Фото убрано');
     if(r.ok){

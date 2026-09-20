@@ -10,7 +10,7 @@
  *  Установка описана в attendance/README.md
  *************************************************************/
 
-var VERSION = '2026-09-27';         // метка версии кода: видна в ответе сервера
+var VERSION = '2026-09-28';         // метка версии кода: видна в ответе сервера
 var SHEET_ID = '';                    // пусто = скрипт привязан к таблице
 var FIRST_ADMIN_NAME = 'Администратор';
 var SESSION_DAYS = 90;                // сколько дней держится вход
@@ -638,9 +638,19 @@ function findPhoto_(studentId) {
 }
 
 /** Кусок фотографии. part — с нуля, total — сколько всего кусков. */
+/** Фотография бывает у ученика и у выпускника. Больше ни у кого. */
+function checkPhotoOwner_(id) {
+  var t = findPerson_(id);
+  if (t && t.role === 'student') return true;
+  var found = false;
+  rows_('alumni').forEach(function (r) { if (String(r.id) === String(id)) found = true; });
+  if (!found) throw new Error('Не нашли, чья это фотография.');
+  return true;
+}
+
 API.photoChunk = function (token, studentId, part, total, chunk) {
   var p = auth_(token); requireStaff_(p);
-  checkStudent_(studentId);
+  checkPhotoOwner_(studentId);
   part = num_(part, 0); total = Math.max(1, num_(total, 1));
   chunk = String(chunk || '');
 
@@ -800,6 +810,8 @@ API.deleteAlumnus = function (token, id) {
   var hit = null;
   rows_('alumni').forEach(function (r) { if (String(r.id) === String(id)) hit = r; });
   if (hit) drop_('alumni', hit._row);
+  var ph = findPhoto_(id);
+  if (ph) { drop_('photos', ph._row); _photoMap = null; }
   return true;
 };
 
