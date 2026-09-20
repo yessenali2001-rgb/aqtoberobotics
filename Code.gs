@@ -10,7 +10,7 @@
  *  Установка описана в attendance/README.md
  *************************************************************/
 
-var VERSION = '2026-09-25';         // метка версии кода: видна в ответе сервера
+var VERSION = '2026-09-27';         // метка версии кода: видна в ответе сервера
 var SHEET_ID = '';                    // пусто = скрипт привязан к таблице
 var FIRST_ADMIN_NAME = 'Администратор';
 var SESSION_DAYS = 90;                // сколько дней держится вход
@@ -26,7 +26,8 @@ var SHEETS = {
   awards:   ['id','studentId','date','title','subject','level','result','note','updatedAt','updatedBy'],
   topics:   ['id','studentId','subject','title','status','due','note','updatedAt','updatedBy'],
   school:   ['id','year','category','event','team','award','result','note','updatedAt','updatedBy'],
-  photos:   ['studentId','data','buf','updatedAt','updatedBy','size']
+  photos:   ['studentId','data','buf','updatedAt','updatedBy','size'],
+  alumni:   ['id','name','year','place','program','city','note','updatedAt','updatedBy']
 };
 
 var STATUSES = ['p','l','e','a'];     // был / опоздал / уважительная / пропуск
@@ -352,6 +353,7 @@ function stateFor_(person) {
       topics: topicsPub_(rows_('topics')).filter(function (t) { return kids.indexOf(t.u) >= 0; }),
       school: rows_('school').map(schoolPub_),
       clubAwards: clubAwards_(people),
+      alumni: rows_('alumni').map(alumniPub_),
       photoMap: myPhotos,
       version: VERSION
     };
@@ -367,6 +369,7 @@ function stateFor_(person) {
         .map(function (x) { return { name: x.name, birth: x.birth, team: x.team }; }),
       clubAwards: clubAwards_(people),
       school: rows_('school').map(schoolPub_),
+      alumni: rows_('alumni').map(alumniPub_),
       photoMap: photoMap_(),
       version: VERSION
     };
@@ -378,12 +381,13 @@ function stateFor_(person) {
     awards: awardsPub_(rows_('awards')),
     topics: topicsPub_(rows_('topics')),
     school: rows_('school').map(schoolPub_),
+    alumni: rows_('alumni').map(alumniPub_),
     photoMap: photoMap_(),
     version: VERSION,
     stats: { students: people.filter(function (x) { return x.role === 'student' && x.active; }).length,
              withBirth: withBirth, awards: rows_('awards').length,
              competitions: settings.competitions.length, plan: settings.plan.length,
-             school: rows_('school').length,
+             school: rows_('school').length, alumni: rows_('alumni').length,
              photos: Object.keys(photoMap_()).length,
              parents: people.filter(function (x) { return x.role === 'parent' && x.active; }).length }
   };
@@ -761,6 +765,41 @@ API.deleteSchoolAward = function (token, id) {
   var hit = null;
   rows_('school').forEach(function (r) { if (String(r.id) === String(id)) hit = r; });
   if (hit) drop_('school', hit._row);
+  return true;
+};
+
+/* ---- выпускники: кто окончил кружок и куда поступил ---- */
+
+function alumniPub_(a) {
+  return {
+    id: String(a.id), name: String(a.name || ''), year: String(a.year || ''),
+    place: String(a.place || ''), program: String(a.program || ''),
+    city: String(a.city || ''), note: String(a.note || '')
+  };
+}
+
+API.saveAlumnus = function (token, rec) {
+  var p = auth_(token); requireStaff_(p);
+  rec = rec || {};
+  var patch = {
+    name: String(rec.name || '').trim(), year: String(rec.year || '').trim(),
+    place: String(rec.place || '').trim(), program: String(rec.program || '').trim(),
+    city: String(rec.city || '').trim(), note: String(rec.note || ''),
+    updatedAt: nowIso_(), updatedBy: String(p.name)
+  };
+  if (!patch.name) throw new Error('Укажите имя выпускника.');
+  var hit = null;
+  if (rec.id) rows_('alumni').forEach(function (r) { if (String(r.id) === String(rec.id)) hit = r; });
+  if (hit) { update_('alumni', hit._row, patch); patch.id = String(hit.id); }
+  else { patch.id = newId_('al'); append_('alumni', patch); }
+  return alumniPub_(patch);
+};
+
+API.deleteAlumnus = function (token, id) {
+  var p = auth_(token); requireStaff_(p);
+  var hit = null;
+  rows_('alumni').forEach(function (r) { if (String(r.id) === String(id)) hit = r; });
+  if (hit) drop_('alumni', hit._row);
   return true;
 };
 

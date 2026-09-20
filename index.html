@@ -164,6 +164,9 @@ th{font-size:12.5px; color:var(--muted); font-weight:600; position:sticky; top:0
 th.sortable{cursor:pointer}
 th.sortable:hover{color:var(--ink)}
 td.num,th.num{text-align:right; font-variant-numeric:tabular-nums}
+/* Длинные имена и вузы переносим по словам. Имя класса своё: .wrap уже
+   занят обёрткой страницы, и её отступы раздували бы ячейки. */
+td.longtext,th.longtext{white-space:normal; vertical-align:middle}
 tbody tr:hover{background:var(--sunk)}
 .grid td,.grid th{padding:4px; text-align:center}
 .grid .stick{position:sticky; left:0; background:var(--panel); text-align:left; z-index:2;
@@ -374,11 +377,11 @@ img.ava{display:block}
 /* Можно вписать адрес прямо здесь (оканчивается на /exec),
    либо оставить пустым и ввести его один раз в интерфейсе. */
 /* Метка сборки самой страницы: по ней видно, не застряла ли у человека старая копия. */
-const SITE_BUILD = '2026-09-26';
+const SITE_BUILD = '2026-09-27';
 
 /* Какую версию серверного кода ожидает этот сайт.
    Если в Apps Script развёрнут более старый Code.gs — покажем предупреждение. */
-const NEED_VERSION = '2026-09-25';
+const NEED_VERSION = '2026-09-27';
 
 /* Прошлые развёртывания сервера: они больше не отвечают. Если такой адрес
    остался сохранён в браузере, молча возвращаемся на нынешний. */
@@ -433,7 +436,7 @@ const nf = n => (Math.round(n*10)/10).toString().replace('.', ',');
 /* ================= состояние ================= */
 const S = {
   api: '', token: '', me: null, settings: null,
-  people: [], marks: [], awards: [], topics: [], birthdays: [], clubAwards: [], school: [],
+  people: [], marks: [], awards: [], topics: [], birthdays: [], clubAwards: [], school: [], alumni: [],
   marksIdx: {}, tab: '', day: todayStr(), month: todayStr().slice(0,7),
   from: '', to: '', sort: 'miss', openStudent: '', busy: false,
   fTeam: '', fCat: '', fRole: '', fYear: '', q: '', showArchive: false
@@ -584,6 +587,7 @@ const photosReady = () => srvAtLeast('2026-09-16');
 const parentsReady = () => srvAtLeast('2026-09-17');
 const mailReady = () => srvAtLeast('2026-09-18');
 const phonesReady = () => srvAtLeast('2026-09-25');
+const alumniReady = () => srvAtLeast('2026-09-27');
 
 /* ---- сообщения родителям в WhatsApp ----
    Рассылать с обычного номера WhatsApp не разрешает — за это блокируют.
@@ -1143,6 +1147,7 @@ function apply(st, fromCache){
   S.clubAwards = st.clubAwards || [];    // и общую сводку наград кружка
   S.photoMap = st.photoMap || {};        // у кого есть фотография и когда менялась
   S.school = st.school || [];            // достижения школы по командам и годам
+  S.alumni = st.alumni || [];            // выпускники и куда поступили
   S.version = st.version || '';
   S.stats = st.stats || null;
   reindex();
@@ -1171,11 +1176,14 @@ function tabList(){
     ['day','Журнал'], ['grid','Таблица'], ['report','Анализ года'],
     ['people','Ученики'], ['extra','Достижения'],
     ['calendar','Календарь'], ['plan','План и темы'],
+    ...(alumniReady() ? [['alumni','Выпускники']] : []),
     ...(isAdmin() ? [['settings','Настройки']] : [])
   ];
-  if(isParent()) return [['my','Занятия'], ['myextra','Достижения'], ['calendar','Календарь']];
+  if(isParent()) return [['my','Занятия'], ['myextra','Достижения'], ['calendar','Календарь'],
+                         ...(alumniReady() ? [['alumni','Выпускники']] : [])];
   return [['my','Мои занятия'], ['myextra','Достижения'],
-          ['calendar','Календарь'], ['plan','План и темы']];
+          ['calendar','Календарь'], ['plan','План и темы'],
+          ...(alumniReady() ? [['alumni','Выпускники']] : [])];
 }
 
 const warnHideBtn = () => ' <button class="btn sm" data-act="warn-hide" ' +
@@ -1217,7 +1225,7 @@ function render(){
   const fn = {
     day: viewDay, grid: viewGrid, report: viewReport, people: viewPeople,
     extra: viewExtra, calendar: viewCalendar, plan: viewPlan,
-    settings: viewSettings, my: viewMy, myextra: viewMyExtra
+    settings: viewSettings, my: viewMy, myextra: viewMyExtra, alumni: viewAlumni
   }[S.tab];
   const keepY = window.scrollY;
   v.innerHTML = fn ? fn() : '';
@@ -1981,6 +1989,96 @@ function compCard(c){
     '</div>';
 }
 
+/* ================= ВЫПУСКНИКИ ================= */
+/* Кто окончил кружок и куда поступил. Список видят все — ученикам полезно
+   знать, куда доходят те, кто занимался рядом с ними. Правят только
+   руководитель и помощник. */
+function viewAlumni(){
+  const all = S.alumni || [];
+  const q = (S.q || '').trim().toLowerCase();
+  const hit = a => !q || (a.name + ' ' + a.place + ' ' + a.program + ' ' + a.city)
+    .toLowerCase().indexOf(q) >= 0;
+  const list = all.filter(hit);
+
+  const head = '<div class="head"><h2>Выпускники</h2>' +
+    (isStaff() ? '<button class="btn sm pri" data-act="alum-form">Добавить выпускника</button>' : '') +
+    '</div>' +
+    (all.length ? '<div class="sect"><div class="row">' +
+      '<input class="in grow" placeholder="Поиск по имени, вузу, специальности" value="' +
+        esc(S.q) + '" data-act="q"></div></div>' : '');
+
+  if(!all.length){
+    return head + '<div class="sect"><p class="muted">Пока никого. ' +
+      (isStaff() ? 'Нажмите «Добавить выпускника» — нужны имя и год выпуска, остальное по желанию.'
+                 : 'Список появится, когда руководитель его заполнит.') + '</p></div>';
+  }
+  if(!list.length) return head + '<div class="sect"><p class="muted">Никто не найден.</p></div>';
+
+  /* Свежие выпуски сверху; без года — в самом низу. */
+  const years = uniq(list.map(a => a.year || '')).sort((x, y) => y.localeCompare(x));
+  const noYear = list.filter(a => !a.year);
+  const groups = years.filter(Boolean).concat(noYear.length ? [''] : []);
+
+  const placeCell = a => (a.place ? esc(a.place) : '<span class="muted">не указано</span>') +
+    (a.city ? '<div class="muted small">' + esc(a.city) + '</div>' : '');
+
+  const blocks = groups.map(y => {
+    const part = list.filter(a => (a.year || '') === y)
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    const rows = part.map(a => '<tr>' +
+      '<td class="longtext">' + esc(a.name) + '</td>' +
+      '<td class="longtext">' + placeCell(a) + '</td>' +
+      '<td class="opt">' + (a.program ? esc(a.program) : '—') + '</td>' +
+      '<td class="opt muted small">' + esc(a.note || '') + '</td>' +
+      (isStaff() ? '<td style="white-space:nowrap">' +
+        '<div class="row" style="gap:6px;flex-wrap:nowrap">' +
+        '<button class="btn sm" data-act="alum-form" data-id="' + esc(a.id) + '">Изм.</button>' +
+        '<button class="btn sm danger" data-act="alum-del" data-id="' + esc(a.id) + '">✕</button>' +
+        '</div></td>' : '') + '</tr>').join('');
+    return '<div class="sect"><h3>' + (y ? 'Выпуск ' + esc(y) : 'Год выпуска не указан') +
+      ' <span class="muted small">(' + part.length + ')</span></h3>' +
+      '<div class="scroll"><table><thead><tr><th class="longtext">Выпускник</th><th class="longtext">Куда поступил</th>' +
+        '<th class="opt">Специальность</th><th class="opt">Примечание</th>' +
+        (isStaff() ? '<th></th>' : '') + '</tr></thead>' +
+        '<tbody>' + rows + '</tbody></table></div></div>';
+  }).join('');
+
+  const places = uniq(all.map(a => a.place)).length;
+  const cards = '<div class="cards">' +
+    tile(all.length, '', 'Выпускников') +
+    tile(places, '', places === 1 ? 'Место учёбы' : 'Мест учёбы') +
+    tile(uniq(all.map(a => a.year)).length, '', 'Выпусков') + '</div>';
+
+  return head + cards + blocks;
+}
+
+function alumniForm(id){
+  const a = id ? (S.alumni || []).find(x => x.id === id) : null;
+  const dl = (name, field) => '<datalist id="' + name + '">' +
+    uniq((S.alumni || []).map(x => x[field])).map(v =>
+      '<option value="' + esc(v) + '">').join('') + '</datalist>';
+  modal('<h3>' + (a ? 'Изменить выпускника' : 'Новый выпускник') + '</h3>' +
+    '<div class="row">' +
+      '<div class="field grow"><label>Имя и фамилия</label><input class="in" id="alName" value="' +
+        esc(a ? a.name : '') + '" placeholder="Фамилия и имя"></div>' +
+      '<div class="field" style="width:120px"><label>Год выпуска</label><input class="in" id="alYear" value="' +
+        esc(a ? a.year : String(new Date().getFullYear())) + '"></div>' +
+    '</div>' +
+    '<div class="field"><label>Куда поступил</label><input class="in" id="alPlace" list="dlPlace" value="' +
+      esc(a ? a.place : '') + '" placeholder="вуз, колледж или школа"></div>' +
+    '<div class="row">' +
+      '<div class="field grow"><label>Специальность</label><input class="in" id="alProg" list="dlProg" value="' +
+        esc(a ? a.program : '') + '" placeholder="можно оставить пустым"></div>' +
+      '<div class="field grow"><label>Город или страна</label><input class="in" id="alCity" list="dlCity" value="' +
+        esc(a ? a.city : '') + '"></div>' +
+    '</div>' +
+    '<div class="field"><label>Примечание</label><input class="in" id="alNote" value="' +
+      esc(a ? a.note : '') + '" placeholder="грант, олимпиада, что угодно"></div>' +
+    dl('dlPlace', 'place') + dl('dlProg', 'program') + dl('dlCity', 'city') +
+    '<button class="btn pri" style="margin-top:12px" data-act="alum-save" data-id="' +
+      (id || '') + '">Сохранить</button>');
+}
+
 function viewCalendar(){
   const all = compList();
   const past = all.filter(c => c.status === 'done' || (compDays(c) !== null && compDays(c) < 0));
@@ -2432,6 +2530,26 @@ async function act(a, el, ev){
   }
   case 'sort': S.sort = el.dataset.k; render(); break;
   case 'f-clear': S.fTeam = ''; S.fCat = ''; render(); break;
+  case 'alum-form': alumniForm(el.dataset.id || ''); break;
+  case 'alum-save': {
+    const rec = { id: el.dataset.id || '', name: val('alName'), year: val('alYear'),
+                  place: val('alPlace'), program: val('alProg'),
+                  city: val('alCity'), note: val('alNote') };
+    if(!rec.name){ say('Укажите имя выпускника.', 'err'); return; }
+    const r = await call('saveAlumnus', [S.token, rec], 'Сохранено');
+    if(r.ok){
+      S.alumni = (S.alumni || []).filter(x => x.id !== r.v.id).concat([r.v]);
+      closeModal(); render();
+    }
+    break;
+  }
+  case 'alum-del': {
+    const a = (S.alumni || []).find(x => x.id === el.dataset.id);
+    if(!confirm('Удалить запись' + (a ? ' о «' + a.name + '»' : '') + '?')) return;
+    const r = await call('deleteAlumnus', [S.token, el.dataset.id], 'Удалено');
+    if(r.ok){ S.alumni = (S.alumni || []).filter(x => x.id !== el.dataset.id); render(); }
+    break;
+  }
   case 'school-form': schoolForm(el.dataset.id || ''); break;
   case 'school-save': {
     const rec = { id: el.dataset.id || '', year: val('sYear'), category: val('sCat'),
